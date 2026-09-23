@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: apitrace_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-apitrace_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apitrace_password}
+      POSTGRES_DB: ${POSTGRES_DB:-apitrace_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-apitrace_user} -d ${POSTGRES_DB:-apitrace_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
