@@ -1,0 +1,28 @@
+{
+  "name": "@apitrace/test-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@apitrace/core": "workspace:*",
+    "@apitrace/planner": "workspace:*",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "undici": "^8.11.2"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.1"
+  }
+}
