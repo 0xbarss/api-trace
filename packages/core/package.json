@@ -17,6 +17,10 @@
     "./schema": {
       "import": "./dist/db/schema.js",
       "types": "./dist/db/schema.d.ts"
+    },
+    "./queue": {
+      "import": "./dist/queue/index.js",
+      "types": "./dist/queue/index.d.ts"
     }
   },
   "scripts": {
