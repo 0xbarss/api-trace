@@ -164,3 +164,85 @@ export const runParamsSchema = {
     additionalProperties: false,
   },
 };
+
+export const getRunSchema = {
+  params: {
+    type: "object",
+    required: ["id"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+    },
+    additionalProperties: false,
+  },
+  response: {
+    200: {
+      type: "object",
+      required: [
+        "id",
+        "targetId",
+        "status",
+        "totalTests",
+        "completedTests",
+        "passedTests",
+        "failedTests",
+        "warningTests",
+        "createdAt",
+      ],
+      properties: {
+        id: { type: "string" },
+        targetId: { type: "string" },
+        status: { type: "string" },
+        totalTests: { type: "integer" },
+        completedTests: { type: "integer" },
+        passedTests: { type: "integer" },
+        failedTests: { type: "integer" },
+        warningTests: { type: "integer" },
+        startedAt: { type: ["string", "null"] },
+        finishedAt: { type: ["string", "null"] },
+        createdAt: { type: "string" },
+      },
+    },
+  },
+};
+
+export const getRunResultsSchema = {
+  params: {
+    type: "object",
+    required: ["id"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+    },
+    additionalProperties: false,
+  },
+  response: {
+    200: {
+      type: "array",
+      items: {
+        type: "object",
+        required: [
+          "id",
+          "runId",
+          "endpointId",
+          "category",
+          "testName",
+          "status",
+          "severity",
+          "detail",
+          "createdAt",
+        ],
+        properties: {
+          id: { type: "string" },
+          runId: { type: "string" },
+          endpointId: { type: "string" },
+          category: { type: "string" },
+          testName: { type: "string" },
+          status: { type: "string" },
+          severity: { type: "string" },
+          latencyMs: { type: ["integer", "null"] },
+          detail: { type: "object", additionalProperties: true },
+          createdAt: { type: "string" },
+        },
+      },
+    },
+  },
+};

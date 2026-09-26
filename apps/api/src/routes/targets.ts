@@ -1,18 +1,22 @@
 import type { FastifyPluginAsync } from "fastify";
 import { TargetService } from "../services/target-service.js";
+import { RunService } from "../services/run-service.js";
 import {
   createTargetSchema,
   getTargetSchema,
   listTargetsSchema,
   deleteTargetSchema,
+  createRunSchema,
 } from "../schemas/routes.js";
 import type {
   CreateTargetBody,
+  CreateRunBody,
   TargetParams,
 } from "../types.js";
 
 export const targetsRoutes: FastifyPluginAsync = async (fastify) => {
   const targetService = new TargetService(fastify.db);
+  const runService = new RunService(fastify.db, fastify.queue);
 
   fastify.get(
     "/",
@@ -49,4 +53,14 @@ export const targetsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(200).send({ success: true, id: request.params.id });
     }
   );
+
+  fastify.post<{ Params: TargetParams; Body: CreateRunBody }>(
+    "/:id/runs",
+    { schema: createRunSchema },
+    async (request, reply) => {
+      const result = await runService.createRun(request.params.id, request.body);
+      return reply.status(201).send(result);
+    }
+  );
 };
+

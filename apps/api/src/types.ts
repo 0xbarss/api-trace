@@ -1,4 +1,4 @@
-import type { Endpoint } from "@apitrace/core";
+import type { Endpoint, TestResultDetail } from "@apitrace/core";
 
 export interface CreateTargetBody {
   name: string;
@@ -55,6 +55,33 @@ export interface CreateRunResponse {
   runId: string;
   totalTests: number;
   status: string;
+}
+
+export interface RunSummaryResponse {
+  id: string;
+  targetId: string;
+  status: string;
+  totalTests: number;
+  completedTests: number;
+  passedTests: number;
+  failedTests: number;
+  warningTests: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+}
+
+export interface RunResultResponse {
+  id: string;
+  runId: string;
+  endpointId: string;
+  category: string;
+  testName: string;
+  status: string;
+  severity: string;
+  latencyMs: number | null;
+  detail: TestResultDetail;
+  createdAt: string;
 }
 
 export interface ApiErrorResponse {
