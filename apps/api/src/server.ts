@@ -1,5 +1,8 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import { registerErrorHandler, HttpError } from "./plugins/error-handler.js";
+
+export { HttpError };
 
 export interface ServerOptions {
   logger?: boolean;
@@ -9,6 +12,8 @@ export async function buildServer(options: ServerOptions = {}): Promise<FastifyI
   const app = Fastify({
     logger: options.logger ?? false,
   });
+
+  registerErrorHandler(app);
 
   await app.register(cors, {
     origin: true,
