@@ -1,0 +1,33 @@
+{
+  "name": "@apitrace/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@apitrace/core": "workspace:*",
+    "@apitrace/discovery": "workspace:*",
+    "@apitrace/planner": "workspace:*",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/websocket": "^11.3.1",
+    "fastify": "^5.12.5",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/ioredis": "^5.0.0",
+    "vitest": "^5.0.1"
+  }
+}
