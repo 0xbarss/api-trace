@@ -1,3 +1,5 @@
+import type { Endpoint } from "@apitrace/core";
+
 export interface CreateTargetBody {
   name: string;
   baseUrl: string;
@@ -6,6 +8,36 @@ export interface CreateTargetBody {
 
 export interface TargetParams {
   id: string;
+}
+
+export interface TargetSummaryResponse {
+  id: string;
+  name: string;
+  baseUrl: string;
+  specSource: string;
+  createdAt: string;
+  updatedAt: string;
+  endpointsCount: number;
+}
+
+export interface TargetDetailResponse {
+  id: string;
+  name: string;
+  baseUrl: string;
+  specSource: string;
+  createdAt: string;
+  updatedAt: string;
+  endpoints: Endpoint[];
+}
+
+export interface DeleteTargetResponse {
+  success: boolean;
+  id: string;
+}
+
+export interface CreateTargetResponse {
+  targetId: string;
+  discoveredEndpointsCount: number;
 }
 
 export interface RunParams {
@@ -17,11 +49,6 @@ export interface CreateRunBody {
   enabledTests?: string[];
   disabledTests?: string[];
   config?: Record<string, unknown>;
-}
-
-export interface CreateTargetResponse {
-  targetId: string;
-  discoveredEndpointsCount: number;
 }
 
 export interface CreateRunResponse {
