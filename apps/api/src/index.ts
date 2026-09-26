@@ -1,6 +1,8 @@
 import { buildServer } from "./server.js";
 
 export * from "./server.js";
+export * from "./types.js";
+export * from "./routes/websocket.js";
 
 async function main(): Promise<void> {
   const port = Number(process.env.PORT) || 3001;

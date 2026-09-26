@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import { RunService } from "../services/run-service.js";
 import { getRunSchema, getRunResultsSchema } from "../schemas/routes.js";
+import { handleRunWebSocket } from "./websocket.js";
 import type { RunParams } from "../types.js";
 
 export const runsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -23,4 +24,13 @@ export const runsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(200).send(results);
     }
   );
+
+  fastify.get<{ Params: RunParams }>(
+    "/:id/stream",
+    { websocket: true },
+    (socket, request) => {
+      void handleRunWebSocket(socket, request);
+    }
+  );
 };
+

@@ -90,3 +90,27 @@ export interface ApiErrorResponse {
   message: string;
   details?: unknown;
 }
+
+export type WebSocketEventType =
+  | "CONNECTED"
+  | "TEST_COMPLETED"
+  | "RUN_STARTED"
+  | "RUN_PROGRESS"
+  | "RUN_COMPLETED"
+  | "ERROR"
+  | "PONG";
+
+export interface WebSocketRunEvent {
+  type: WebSocketEventType | string;
+  runId?: string;
+  status?: string;
+  endpointId?: string;
+  result?: unknown;
+  completedTests?: number;
+  totalTests?: number;
+  message?: string;
+  error?: string;
+  timestamp?: string;
+  [key: string]: unknown;
+}
+
