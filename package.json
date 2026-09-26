@@ -6,6 +6,8 @@
   "scripts": {
     "test": "pnpm -r run test",
     "build": "pnpm -r run build",
+    "dev:web": "pnpm --filter @apitrace/web run dev",
+    "dev:api": "pnpm --filter @apitrace/api run dev",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "db:generate": "pnpm --filter @apitrace/core run db:generate",
