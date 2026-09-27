@@ -13,6 +13,8 @@ import { TargetCatalog } from "./components/TargetCatalog.js";
 import { TargetIngestionModal } from "./components/TargetIngestionModal.js";
 import { RunVisualizer } from "./components/RunVisualizer.js";
 import { EventTicker } from "./components/EventTicker.js";
+import { FindingsView } from "./components/FindingsView.js";
+import { FindingModal } from "./components/FindingModal.js";
 import { apiClient } from "./api/client.js";
 import type {
   TargetSummary,
@@ -20,6 +22,7 @@ import type {
   CreateTargetInput,
   RunSummary,
   WebSocketRunEvent,
+  TestFinding,
 } from "./types.js";
 
 const getInitialView = (): "landing" | "app" => {
@@ -61,6 +64,7 @@ export function App(): React.ReactElement {
   const [loadingRuns, setLoadingRuns] = useState(false);
   const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean | null>(null);
+  const [selectedFinding, setSelectedFinding] = useState<TestFinding | null>(null);
 
   const switchView = (view: "landing" | "app") => {
     setCurrentView(view);
@@ -336,62 +340,47 @@ export function App(): React.ReactElement {
               streaming={isStreaming}
               onToggleStreaming={() => setIsStreaming((prev) => !prev)}
               onClearEvents={() => setRunEvents([])}
+              onSelectFinding={(f) => setSelectedFinding(f)}
             />
           </div>
         )}
 
         {activeTab === "findings" && (
-          <div className="bg-white border border-zinc-200 rounded-lg p-8 text-center space-y-3 shadow-xs">
-            <div className="inline-flex p-3 rounded-full bg-zinc-50 border border-zinc-200 text-zinc-400">
-              <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-zinc-900">
-                Findings &amp; results
-              </h2>
-              <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                Test results, response details, and latency numbers will appear here after a test run finishes.
-              </p>
-            </div>
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => switchTab("targets")}
-                className="px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium transition-colors"
-              >
-                View targets
-              </button>
-            </div>
-          </div>
+          <FindingsView
+            runs={runs}
+            activeRunId={activeRunId}
+            onSelectRun={(id) => setActiveRunId(id)}
+            targets={targets}
+          />
         )}
 
         {/* System Telemetry & Status Bar */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="border border-zinc-200 bg-white rounded-lg p-3.5 shadow-xs text-xs">
             <div className="text-zinc-500 font-mono text-[11px] uppercase tracking-wider flex items-center justify-between">
-              <span>Fastify Gateway</span>
+              <span>Backend API</span>
               <Activity className="w-3.5 h-3.5 text-emerald-600" />
             </div>
             <div className="mt-1.5 font-mono text-zinc-900 font-medium">http://127.0.0.1:3001</div>
-            <div className="text-[11px] text-zinc-500 mt-0.5">REST &amp; OpenAPI service</div>
+            <div className="text-[11px] text-zinc-500 mt-0.5">REST and OpenAPI service</div>
           </div>
 
           <div className="border border-zinc-200 bg-white rounded-lg p-3.5 shadow-xs text-xs">
             <div className="text-zinc-500 font-mono text-[11px] uppercase tracking-wider flex items-center justify-between">
-              <span>Event Broker</span>
+              <span>Event stream</span>
               <Radio className="w-3.5 h-3.5 text-emerald-600" />
             </div>
-            <div className="mt-1.5 font-mono text-zinc-900 font-medium">Redis 7 PubSub</div>
-            <div className="text-[11px] text-zinc-500 mt-0.5">Live test progress channel</div>
+            <div className="mt-1.5 font-mono text-zinc-900 font-medium">Redis PubSub</div>
+            <div className="text-[11px] text-zinc-500 mt-0.5">Live test events</div>
           </div>
 
           <div className="border border-zinc-200 bg-white rounded-lg p-3.5 shadow-xs text-xs">
             <div className="text-zinc-500 font-mono text-[11px] uppercase tracking-wider flex items-center justify-between">
-              <span>Probe Suite</span>
+              <span>Test engine</span>
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
             </div>
-            <div className="mt-1.5 font-mono text-zinc-900 font-medium">Security &amp; speed suite</div>
-            <div className="text-[11px] text-zinc-500 mt-0.5">Automated HTTP probes</div>
+            <div className="mt-1.5 font-mono text-zinc-900 font-medium">Security and latency tests</div>
+            <div className="text-[11px] text-zinc-500 mt-0.5">Automated HTTP tests</div>
           </div>
         </div>
       </main>
@@ -401,6 +390,13 @@ export function App(): React.ReactElement {
         isOpen={isIngestModalOpen}
         onClose={() => setIsIngestModalOpen(false)}
         onSubmit={handleCreateTarget}
+      />
+
+      {/* Finding Detail Modal */}
+      <FindingModal
+        finding={selectedFinding}
+        isOpen={Boolean(selectedFinding)}
+        onClose={() => setSelectedFinding(null)}
       />
     </div>
   );

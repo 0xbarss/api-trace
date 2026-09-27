@@ -116,10 +116,10 @@ export function RunVisualizer({
         </div>
         <div className="space-y-1">
           <h3 className="text-sm font-semibold text-zinc-900">
-            No Test Runs Executed Yet
+            No test runs yet
           </h3>
           <p className="text-xs text-zinc-500 max-w-sm mx-auto">
-            Trigger a test run from the Targets catalog to inspect live progress, test telemetry, and findings.
+            Start a test run from the Targets tab to watch live progress and view findings.
           </p>
         </div>
         {onTriggerNewRun && (
@@ -130,7 +130,7 @@ export function RunVisualizer({
               className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium shadow-xs transition-colors inline-flex items-center gap-1.5"
             >
               <Play className="w-3.5 h-3.5 fill-white" />
-              <span>Start First Audit</span>
+              <span>Start test run</span>
             </button>
           </div>
         )}
@@ -193,7 +193,7 @@ export function RunVisualizer({
         {/* Live Progress Bar */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <span className="font-medium text-zinc-700">Execution Progress</span>
+            <span className="font-medium text-zinc-700">Progress</span>
             <span className="font-mono text-zinc-900 font-semibold">
               {completed} / {total} tests ({percentage}%)
             </span>
@@ -217,13 +217,13 @@ export function RunVisualizer({
         {/* Total Tests */}
         <div className="bg-white border border-zinc-200 rounded-xl p-3.5 shadow-xs">
           <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider flex items-center justify-between">
-            <span>Total Probes</span>
+            <span>Total tests</span>
             <Layers className="w-3.5 h-3.5 text-zinc-400" />
           </div>
           <div className="text-2xl font-bold font-mono text-zinc-900 mt-1">
             {total}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-0.5">Planned checks</div>
+          <div className="text-[11px] text-zinc-400 mt-0.5">Planned tests</div>
         </div>
 
         {/* Passed */}
@@ -235,7 +235,7 @@ export function RunVisualizer({
           <div className="text-2xl font-bold font-mono text-emerald-700 mt-1">
             {passed}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-0.5">Validated contracts</div>
+          <div className="text-[11px] text-zinc-400 mt-0.5">Passed tests</div>
         </div>
 
         {/* Warnings */}
@@ -247,7 +247,7 @@ export function RunVisualizer({
           <div className="text-2xl font-bold font-mono text-amber-700 mt-1">
             {warnings}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-0.5">SLA / timing flags</div>
+          <div className="text-[11px] text-zinc-400 mt-0.5">Non-blocking notices</div>
         </div>
 
         {/* Failed */}
@@ -259,7 +259,7 @@ export function RunVisualizer({
           <div className="text-2xl font-bold font-mono text-rose-700 mt-1">
             {failed}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-0.5">Vulnerabilities found</div>
+          <div className="text-[11px] text-zinc-400 mt-0.5">Failed tests</div>
         </div>
       </div>
     </div>

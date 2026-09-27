@@ -70,14 +70,14 @@ export function TargetCatalog({
       setRunningTargetId(targetId);
       await onTriggerRun(targetId);
       setDialogNotice({
-        title: "Test Run Queued",
-        description: `Dispatched test suite execution for "${name}". Test jobs are currently being processed by the worker queue.`,
+        title: "Test run queued",
+        description: `Started test run for "${name}". Results will appear in the Test Runs tab as tests complete.`,
         variant: "success",
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setDialogNotice({
-        title: "Failed to Queue Test Run",
+        title: "Could not queue test run",
         description: msg,
         variant: "danger",
       });
@@ -102,7 +102,7 @@ export function TargetCatalog({
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setDialogNotice({
-        title: "Failed to Remove Target",
+        title: "Could not remove target",
         description: msg,
         variant: "danger",
       });

@@ -12,6 +12,7 @@ import {
   Play,
   Trash2,
   ShieldAlert,
+  ExternalLink,
 } from "lucide-react";
 import type { WebSocketRunEvent, TestFinding } from "../types.js";
 
@@ -365,7 +366,7 @@ export function EventTicker({
                         <div className="pt-2 border-t border-zinc-200/60">
                           <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-700 font-semibold flex items-center gap-1">
                             <ShieldAlert className="w-3 h-3 text-emerald-600" />
-                            <span>Remediation Guidance</span>
+                            <span>Suggested fix</span>
                           </div>
                           <p className="mt-0.5 text-zinc-700 leading-relaxed text-[11px]">
                             {finding.detail.remediation}
@@ -380,6 +381,22 @@ export function EventTicker({
                             {finding.detail.requestSent.method}
                           </span>{" "}
                           <span>{finding.detail.requestSent.url}</span>
+                        </div>
+                      )}
+
+                      {onSelectFinding && (
+                        <div className="pt-2 border-t border-zinc-200/60 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectFinding(finding);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-900 hover:bg-zinc-800 text-white font-mono text-[10px] font-medium transition-colors shadow-xs"
+                          >
+                            <span>View details</span>
+                            <ExternalLink className="w-3 h-3 text-zinc-300" />
+                          </button>
                         </div>
                       )}
                     </div>
