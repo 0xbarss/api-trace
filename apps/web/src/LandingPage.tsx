@@ -65,6 +65,7 @@ export function LandingPage({ onSwitchToApp }: LandingPageProps): React.ReactEle
   const [completedScan, setCompletedScan] = useState(false);
   const [visibleCount, setVisibleCount] = useState<number>(0);
 
+  const simulationRef = useRef<HTMLElement>(null);
   const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 
   const clearAllTimeouts = () => {
@@ -77,6 +78,7 @@ export function LandingPage({ onSwitchToApp }: LandingPageProps): React.ReactEle
   }, []);
 
   const runInteractiveDemo = () => {
+    simulationRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (isRunningScan) return;
     clearAllTimeouts();
     setIsRunningScan(true);
@@ -361,7 +363,11 @@ export function LandingPage({ onSwitchToApp }: LandingPageProps): React.ReactEle
         </section>
 
         {/* Interactive Live Scanner Sandbox */}
-        <section className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden">
+        <section
+          ref={simulationRef}
+          id="simulation-section"
+          className="bg-white border border-zinc-200 rounded-xl shadow-sm overflow-hidden scroll-mt-20"
+        >
           {/* Scanner Header */}
           <div className="px-5 py-3.5 border-b border-zinc-200 bg-zinc-50/75 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">

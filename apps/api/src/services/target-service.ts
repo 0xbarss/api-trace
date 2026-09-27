@@ -9,6 +9,43 @@ import type {
   TargetDetailResponse,
 } from "../types.js";
 
+function formatSpecError(err: unknown, specSource: string): string {
+  const raw = err instanceof Error ? err.message : String(err);
+
+  // Check for DNS / host resolution failure
+  if (/getaddrinfo ENOTFOUND/i.test(raw)) {
+    const match = raw.match(/getaddrinfo ENOTFOUND\s+([^\s:]+)/i);
+    const host = match ? match[1] : "host";
+    return `Could not reach specification URL: host "${host}" could not be resolved. Please verify the domain and network connection.`;
+  }
+
+  // Check for connection refused
+  if (/ECONNREFUSED/i.test(raw)) {
+    return "Could not connect to specification host: connection refused. Ensure the service is running and accessible.";
+  }
+
+  // Check for connection timeout
+  if (/ETIMEDOUT/i.test(raw) || /ESOCKETTIMEDOUT/i.test(raw)) {
+    return "Connection timed out while fetching specification. Please verify the URL and network availability.";
+  }
+
+  // Check for general downloading error
+  if (/Error downloading\s+(https?:\/\/[^\s:]+)/i.test(raw)) {
+    const match = raw.match(/Error downloading\s+(https?:\/\/[^\s:]+)/i);
+    const targetUrl = match ? match[1] : specSource;
+    return `Could not download specification from ${targetUrl}. Please ensure the URL is reachable.`;
+  }
+
+  // Check for JSON or YAML syntax errors
+  if (/JSON or YAML/i.test(raw)) {
+    return "Failed to parse OpenAPI specification: invalid JSON or YAML format.";
+  }
+
+  // Default parsing failure
+  const cleaned = raw.replace(/^Error:\s*/, "");
+  return `Failed to parse OpenAPI specification: ${cleaned}`;
+}
+
 export class TargetService {
   constructor(private readonly db: Database) {}
 
@@ -27,8 +64,8 @@ export class TargetService {
     try {
       discovered = await discoverApi(body.specSource);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      throw new HttpError(400, `Failed to parse OpenAPI specification: ${message}`);
+      const message = formatSpecError(err, body.specSource);
+      throw new HttpError(400, message);
     }
 
     const normalizedBaseUrl = trimmedBaseUrl.replace(/\/+$/, "");
