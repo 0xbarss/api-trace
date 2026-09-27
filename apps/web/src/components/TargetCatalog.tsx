@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Server,
   Play,
@@ -204,8 +205,9 @@ export function TargetCatalog({
   });
 
   return (
-    <div className="space-y-4">
-      {/* Catalog Controls Header */}
+    <>
+      <div className="space-y-4">
+        {/* Catalog Controls Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-lg border border-zinc-200 shadow-xs">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
@@ -334,13 +336,15 @@ export function TargetCatalog({
           ))}
         </div>
       )}
+      </div>
 
       {/* Discovered Endpoints Inspection Drawer / Modal */}
-      {inspectingTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-end bg-zinc-950/30 backdrop-blur-xs animate-in fade-in duration-150 cursor-pointer"
-          onClick={() => setInspectingTarget(null)}
-        >
+      {inspectingTarget && typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 flex justify-end bg-zinc-950/30 backdrop-blur-xs animate-in fade-in duration-150 cursor-pointer"
+            onClick={() => setInspectingTarget(null)}
+          >
           <div
             className="bg-white w-full max-w-2xl h-full shadow-2xl border-l border-zinc-200 flex flex-col cursor-default"
             onClick={(e) => e.stopPropagation()}
@@ -461,7 +465,8 @@ export function TargetCatalog({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Dialog for Removal */}
@@ -490,6 +495,6 @@ export function TargetCatalog({
         confirmText="OK"
         onConfirm={() => setDialogNotice(null)}
       />
-    </div>
+    </>
   );
 }
