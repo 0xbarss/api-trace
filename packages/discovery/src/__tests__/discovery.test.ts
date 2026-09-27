@@ -371,4 +371,48 @@ paths:
       "Failed to parse specification string"
     );
   });
+
+  it("should fetch and discover specification from an HTTP URL", async () => {
+    const http = await import("node:http");
+    const sampleSpec = JSON.stringify({
+      openapi: "3.0.0",
+      info: { title: "Remote Test API", version: "1.0.0" },
+      paths: {
+        "/ping": {
+          get: {
+            operationId: "ping",
+            responses: { "200": { description: "pong" } },
+          },
+        },
+      },
+    });
+
+    const server = http.createServer((req, res) => {
+      if (req.url === "/spec.json") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(sampleSpec);
+      } else {
+        res.writeHead(404);
+        res.end("Not Found");
+      }
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    try {
+      const result = await discoverApi(`http://127.0.0.1:${port}/spec.json`);
+      expect(result.title).toBe("Remote Test API");
+      expect(result.endpoints).toHaveLength(1);
+      expect(result.endpoints[0].path).toBe("/ping");
+
+      await expect(
+        discoverApi(`http://127.0.0.1:${port}/missing.json`)
+      ).rejects.toThrow("Failed to download specification");
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
 });
+

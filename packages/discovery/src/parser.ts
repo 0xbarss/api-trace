@@ -3,7 +3,7 @@ import YAML from "yaml";
 import type { OpenAPI } from "openapi-types";
 import type { ParseOptions } from "./types.js";
 
-function parseSpecInput(input: string | Record<string, unknown>): string | OpenAPI.Document {
+async function parseSpecInput(input: string | Record<string, unknown>): Promise<OpenAPI.Document> {
   if (typeof input !== "string") {
     return structuredClone(input) as OpenAPI.Document;
   }
@@ -13,15 +13,37 @@ function parseSpecInput(input: string | Record<string, unknown>): string | OpenA
     throw new Error("Specification input cannot be empty");
   }
 
+  let textToParse = trimmed;
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-    return trimmed;
+    try {
+      const response = await fetch(trimmed, {
+        headers: {
+          Accept: "application/json, application/yaml, text/yaml, text/plain, */*",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to download specification from ${trimmed}: HTTP ${response.status} ${response.statusText}`
+        );
+      }
+
+      textToParse = await response.text();
+    } catch (fetchErr) {
+      if (fetchErr instanceof Error && fetchErr.message.startsWith("Failed to download")) {
+        throw fetchErr;
+      }
+      const rawMsg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr);
+      throw new Error(`Failed to reach specification URL "${trimmed}": ${rawMsg}`);
+    }
   }
 
   try {
-    return JSON.parse(trimmed) as OpenAPI.Document;
+    return JSON.parse(textToParse) as OpenAPI.Document;
   } catch {
     try {
-      return YAML.parse(trimmed) as OpenAPI.Document;
+      return YAML.parse(textToParse) as OpenAPI.Document;
     } catch (yamlErr) {
       throw new Error(
         `Failed to parse specification string as JSON or YAML: ${(yamlErr as Error).message}`
@@ -73,16 +95,21 @@ export async function parseAndDereferenceSpec(
   input: string | Record<string, unknown>,
   options?: ParseOptions
 ): Promise<OpenAPI.Document> {
-  const prepared = parseSpecInput(input);
+  const prepared = await parseSpecInput(input);
   const circularOption = options?.circular;
   const maxDepth = options?.maxDepth ?? 20;
 
   const parser = new SwaggerParser();
-  const dereferenced = await parser.dereference(prepared, {
+  const dereferenced = (await parser.dereference(prepared, {
     dereference: {
       circular: circularOption === false ? false : circularOption === "ignore" ? "ignore" : true,
     },
-  });
+    resolve: {
+      http: {
+        safeUrlResolver: false,
+      } as unknown as SwaggerParser.HTTPResolverOptions,
+    },
+  })) as OpenAPI.Document;
 
   if (circularOption === false) {
     return dereferenced;
