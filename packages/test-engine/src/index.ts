@@ -4,4 +4,6 @@ export * from "./utils.js";
 export * from "./security/index.js";
 export * from "./performance/index.js";
 export * from "./contract/index.js";
+export * from "./fuzzing/index.js";
+export * from "./fuzzing/payloads.js";
 export * from "./runner.js";

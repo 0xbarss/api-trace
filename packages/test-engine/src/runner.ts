@@ -59,6 +59,12 @@ export const registeredRunners: RegisteredRunner[] = [
     run: (job, opts) => executeTestJob(job, opts),
   },
   {
+    name: "polyglot_fuzz_injection_matrix",
+    category: "security",
+    description: "Dispatch NoSQL, command injection, path traversal, and SSRF payloads and detect leakage or blind time delays",
+    run: (job, opts) => executeTestJob(job, opts),
+  },
+  {
     name: "latency_baseline_distribution",
     category: "performance",
     description: "Measure p50, p95, and p99 response latencies over sample distribution",

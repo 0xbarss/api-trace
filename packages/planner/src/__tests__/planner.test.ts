@@ -123,6 +123,7 @@ describe("Test Plan Generator & Matrix Rules", () => {
       expect(testNames).not.toContain("bola_unauthorized_object_access");
       expect(testNames).not.toContain("mass_assignment_probe");
       expect(testNames).not.toContain("injection_signal_probe");
+      expect(testNames).not.toContain("polyglot_fuzz_injection_matrix");
       expect(testNames).not.toContain("openapi_schema_conformance");
     });
 
@@ -166,6 +167,7 @@ describe("Test Plan Generator & Matrix Rules", () => {
 
       expect(testNames).toContain("mass_assignment_probe");
       expect(testNames).toContain("injection_signal_probe");
+      expect(testNames).toContain("polyglot_fuzz_injection_matrix");
       expect(testNames).toContain("auth_missing_token");
       expect(testNames).toContain("auth_malformed_token");
     });

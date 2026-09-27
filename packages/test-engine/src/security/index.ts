@@ -2,6 +2,7 @@ import type { TestJobPayload } from "@apitrace/planner";
 import type { TestExecutionResult } from "../types.js";
 import type { HttpProbeClient } from "../http/client.js";
 import { interpolatePath, truncate, buildSampleBody } from "../utils.js";
+import { runPolyglotFuzzProbe } from "../fuzzing/index.js";
 
 const KNOWN_STACK_PATTERNS = [
   /at\s+[\w\d_.]+\s+\(.*:\d+:\d+\)/i,
@@ -558,6 +559,8 @@ export async function runSecurityProbe(
       return runInfoLeakageCheck(job, client);
     case "injection_signal_probe":
       return runInjectionSignalProbe(job, client);
+    case "polyglot_fuzz_injection_matrix":
+      return runPolyglotFuzzProbe(job, client);
     default:
       return runAuthMissingCheck(job, client);
   }
