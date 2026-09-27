@@ -76,6 +76,12 @@ export const registeredRunners: RegisteredRunner[] = [
     description: "Verify response status code matches documented specification codes",
     run: (job, opts) => executeTestJob(job, opts),
   },
+  {
+    name: "contract_negative_schema_mutation",
+    category: "contract",
+    description: "Verify mutating endpoint rejects malformed schemas and boundary violations with HTTP 400/422",
+    run: (job, opts) => executeTestJob(job, opts),
+  },
 ];
 
 export async function executeTestJob(

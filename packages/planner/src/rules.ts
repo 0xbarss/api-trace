@@ -105,4 +105,10 @@ export const matrixRules: MatrixRule[] = [
     description: "Verify response status code matches documented specification codes",
     matches: () => true,
   },
+  {
+    name: "contract_negative_schema_mutation",
+    category: "contract",
+    description: "Verify mutating endpoint rejects malformed schemas and boundary violations with HTTP 400/422",
+    matches: isMutatingWithBody,
+  },
 ];

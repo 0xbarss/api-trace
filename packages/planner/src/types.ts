@@ -52,3 +52,17 @@ export interface MatrixRule {
   matches: (endpoint: PlannerEndpointInput) => boolean;
   buildConfig?: (endpoint: PlannerEndpointInput, options?: TestPlanOptions) => Record<string, unknown> | undefined;
 }
+
+export interface SchemaMutationCase {
+  name: string;
+  description: string;
+  mutationType:
+    | "type_inversion"
+    | "required_stripping"
+    | "string_boundary"
+    | "number_boundary"
+    | "unexpected_property";
+  body: Record<string, unknown>;
+  targetField?: string;
+}
+
