@@ -17,6 +17,8 @@ const KNOWN_STACK_PATTERNS = [
 
 const SQL_SYNTAX_ERROR_PATTERNS = [
   /syntax error at or near/i,
+  /syntax error near/i,
+  /near ".*": syntax error/i,
   /unclosed quotation mark/i,
   /SQLSTATE\[/i,
   /QueryFailedError/i,
@@ -24,6 +26,7 @@ const SQL_SYNTAX_ERROR_PATTERNS = [
   /pg_query\(\)/i,
   /mysql_fetch_array/i,
   /sqlite3::/i,
+  /SqliteError/i,
 ];
 
 export async function runAuthMissingCheck(
@@ -457,67 +460,78 @@ export async function runInjectionSignalProbe(
 ): Promise<TestExecutionResult> {
   const path = interpolatePath(job.path, job.parameters);
   const targetUrl = client.buildUrl(job.baseUrl, path);
-  const injectionPayload = "' OR '1'='1";
+  const injectionPayloads = ["' OR '1'='1", "1' OR 1=1--", "'"];
 
-  const queryParams: Record<string, string> = {};
-  if (job.parameters) {
-    for (const p of job.parameters) {
-      if (p.in === "query") {
-        queryParams[p.name] = injectionPayload;
+  let lastStatus = 200;
+  let lastHeaders: Record<string, string> = {};
+  let lastLatency = 0;
+
+  for (const payload of injectionPayloads) {
+    const queryParams: Record<string, string> = {};
+    if (job.parameters) {
+      for (const p of job.parameters) {
+        if (p.in === "query") {
+          queryParams[p.name] = payload;
+        }
       }
     }
-  }
 
-  const res = await client.send(job.baseUrl, {
-    method: job.method,
-    path,
-    query: Object.keys(queryParams).length > 0 ? queryParams : { q: injectionPayload },
-    body:
-      job.method !== "GET"
-        ? {
-            query: injectionPayload,
-            filter: injectionPayload,
-          }
-        : undefined,
-  });
+    const res = await client.send(job.baseUrl, {
+      method: job.method,
+      path,
+      query: Object.keys(queryParams).length > 0 ? queryParams : { q: payload },
+      body:
+        job.method !== "GET"
+          ? {
+              query: payload,
+              filter: payload,
+            }
+          : undefined,
+    });
 
-  const matchedPattern = SQL_SYNTAX_ERROR_PATTERNS.find((pattern) => pattern.test(res.body));
+    lastStatus = res.statusCode;
+    lastHeaders = res.headers;
+    lastLatency = res.latencyMs;
 
-  if (matchedPattern) {
-    return {
-      status: "fail",
-      severity: "critical",
-      latencyMs: res.latencyMs,
-      detail: {
-        evidence: `Database syntax error leaked on injection probe payload: ${matchedPattern.toString()}`,
-        requestSent: {
-          method: job.method,
-          url: targetUrl,
-          headers: { "x-probe-type": "injection-signal" },
+    const matchedPattern = SQL_SYNTAX_ERROR_PATTERNS.find((pattern) => pattern.test(res.body));
+
+    if (matchedPattern) {
+      return {
+        status: "fail",
+        severity: "critical",
+        latencyMs: res.latencyMs,
+        detail: {
+          evidence: `Database syntax error leaked on injection probe payload: ${matchedPattern.toString()}`,
+          requestSent: {
+            method: job.method,
+            url: targetUrl,
+            headers: { "x-probe-type": "injection-signal" },
+            body: job.method !== "GET" ? { query: payload } : undefined,
+          },
+          responseReceived: {
+            status: res.statusCode,
+            headers: res.headers,
+            body: truncate(res.body),
+          },
+          remediation: "Use parameterized queries and prepared statements exclusively to prevent SQL injection.",
         },
-        responseReceived: {
-          status: res.statusCode,
-          headers: res.headers,
-          body: truncate(res.body),
-        },
-        remediation: "Use parameterized queries and prepared statements exclusively to prevent SQL injection.",
-      },
-    };
+      };
+    }
   }
 
   return {
     status: "pass",
     severity: "info",
-    latencyMs: res.latencyMs,
+    latencyMs: lastLatency,
     detail: {
-      evidence: `No database syntax error leaked upon injection probe (HTTP ${res.statusCode}).`,
+      evidence: `No database syntax error leaked upon injection probe (HTTP ${lastStatus}).`,
       requestSent: {
         method: job.method,
         url: targetUrl,
       },
       responseReceived: {
-        status: res.statusCode,
-        headers: res.headers,
+        status: lastStatus,
+        headers: lastHeaders,
       },
     },
   };
