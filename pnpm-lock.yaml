@@ -35,6 +35,9 @@ importers:
       '@apitrace/planner':
         specifier: workspace:*
         version: link:../../packages/planner
+      '@apitrace/test-engine':
+        specifier: workspace:*
+        version: link:../../packages/test-engine
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0

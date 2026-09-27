@@ -21,6 +21,7 @@
     "@apitrace/core": "workspace:*",
     "@apitrace/discovery": "workspace:*",
     "@apitrace/planner": "workspace:*",
+    "@apitrace/test-engine": "workspace:*",
     "@fastify/cors": "^11.3.0",
     "@fastify/websocket": "^11.3.1",
     "drizzle-orm": "^0.45.3",
