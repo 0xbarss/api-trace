@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Server,
   Play,
@@ -53,6 +53,17 @@ export function TargetCatalog({
       t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.baseUrl.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  useEffect(() => {
+    if (!inspectingTarget) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setInspectingTarget(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [inspectingTarget]);
 
   const handleInspect = async (targetId: string) => {
     try {
@@ -326,8 +337,14 @@ export function TargetCatalog({
 
       {/* Discovered Endpoints Inspection Drawer / Modal */}
       {inspectingTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-end bg-zinc-950/30 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-2xl h-full shadow-2xl border-l border-zinc-200 flex flex-col">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-end bg-zinc-950/30 backdrop-blur-xs animate-in fade-in duration-150 cursor-pointer"
+          onClick={() => setInspectingTarget(null)}
+        >
+          <div
+            className="bg-white w-full max-w-2xl h-full shadow-2xl border-l border-zinc-200 flex flex-col cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Drawer Header */}
             <div className="p-4 border-b border-zinc-200 bg-zinc-50/75 flex items-center justify-between">
               <div>

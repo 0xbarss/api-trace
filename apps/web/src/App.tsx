@@ -286,18 +286,14 @@ export function App(): React.ReactElement {
           </nav>
         </div>
 
-        <div className="flex items-center gap-3 text-xs">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-50 border border-zinc-200 text-zinc-600 font-mono">
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                isLiveConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
-              }`}
-            />
-            <span>
-              {isLiveConnected ? "ws://127.0.0.1:3001 (Live)" : "Connecting to backend..."}
-            </span>
+        {isLiveConnected && (
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-50 border border-zinc-200 text-zinc-600 font-mono">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>ws://127.0.0.1:3001 (Live)</span>
+            </div>
           </div>
-        </div>
+        )}
       </header>
 
       {/* Main Content Area */}
