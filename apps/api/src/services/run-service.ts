@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { generateTestPlan, type TestJobPayload } from "@apitrace/planner";
 import {
   targets,
@@ -111,6 +111,30 @@ export class RunService {
       latencyMs: r.latencyMs,
       detail: r.detail,
       createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async listRuns(targetId?: string): Promise<RunSummaryResponse[]> {
+    const baseQuery = this.db.select().from(testRuns);
+    const rows = targetId
+      ? await baseQuery
+          .where(eq(testRuns.targetId, targetId))
+          .orderBy(desc(testRuns.createdAt))
+          .limit(50)
+      : await baseQuery.orderBy(desc(testRuns.createdAt)).limit(50);
+
+    return rows.map((run) => ({
+      id: run.id,
+      targetId: run.targetId,
+      status: run.status,
+      totalTests: run.totalTests,
+      completedTests: run.completedTests,
+      passedTests: run.passedTests,
+      failedTests: run.failedTests,
+      warningTests: run.warningTests,
+      startedAt: run.startedAt ? run.startedAt.toISOString() : null,
+      finishedAt: run.finishedAt ? run.finishedAt.toISOString() : null,
+      createdAt: run.createdAt.toISOString(),
     }));
   }
 }

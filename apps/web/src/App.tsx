@@ -11,8 +11,16 @@ import {
 import { LandingPage } from "./LandingPage.js";
 import { TargetCatalog } from "./components/TargetCatalog.js";
 import { TargetIngestionModal } from "./components/TargetIngestionModal.js";
+import { RunVisualizer } from "./components/RunVisualizer.js";
+import { EventTicker } from "./components/EventTicker.js";
 import { apiClient } from "./api/client.js";
-import type { TargetSummary, TargetDetail, CreateTargetInput } from "./types.js";
+import type {
+  TargetSummary,
+  TargetDetail,
+  CreateTargetInput,
+  RunSummary,
+  WebSocketRunEvent,
+} from "./types.js";
 
 const getInitialView = (): "landing" | "app" => {
   if (typeof window !== "undefined") {
@@ -46,6 +54,11 @@ export function App(): React.ReactElement {
   const [activeTab, setActiveTab] = useState<"targets" | "runs" | "findings">(getInitialTab);
   const [targets, setTargets] = useState<TargetSummary[]>([]);
   const [loadingTargets, setLoadingTargets] = useState(false);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [runEvents, setRunEvents] = useState<WebSocketRunEvent[]>([]);
+  const [isStreaming, setIsStreaming] = useState(true);
+  const [loadingRuns, setLoadingRuns] = useState(false);
   const [isIngestModalOpen, setIsIngestModalOpen] = useState(false);
   const [isLiveConnected, setIsLiveConnected] = useState<boolean | null>(null);
 
@@ -104,11 +117,84 @@ export function App(): React.ReactElement {
     }
   }, []);
 
+  const fetchRuns = useCallback(async () => {
+    try {
+      setLoadingRuns(true);
+      const list = await apiClient.listRuns();
+      setRuns(list);
+      if (list.length > 0) {
+        setActiveRunId((prev) => (prev && list.some((r) => r.id === prev) ? prev : list[0].id));
+      }
+    } catch (err) {
+      console.error("Failed to load runs:", err);
+    } finally {
+      setLoadingRuns(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (currentView === "app") {
       void fetchTargets();
+      void fetchRuns();
     }
-  }, [currentView, fetchTargets]);
+  }, [currentView, fetchTargets, fetchRuns]);
+
+  useEffect(() => {
+    if (!activeRunId || currentView !== "app" || activeTab !== "runs" || !isStreaming) {
+      return;
+    }
+
+    void apiClient.getRunResults(activeRunId).then((findings) => {
+      if (findings.length > 0) {
+        setRunEvents(
+          findings.map((f) => ({
+            type: "TEST_COMPLETED",
+            runId: activeRunId,
+            endpointId: f.endpointId,
+            result: f,
+            timestamp: f.createdAt,
+          }))
+        );
+      }
+    });
+
+    const unsubscribe = apiClient.subscribeRunStream(
+      activeRunId,
+      (event) => {
+        if (event.type === "TEST_COMPLETED" && event.result) {
+          setRunEvents((prev) => [event, ...prev]);
+
+          setRuns((prev) =>
+            prev.map((r) => {
+              if (r.id !== activeRunId) return r;
+              const status = event.result!.status;
+              return {
+                ...r,
+                completedTests: event.completedTests ?? r.completedTests + 1,
+                totalTests: event.totalTests ?? r.totalTests,
+                passedTests: status === "pass" ? r.passedTests + 1 : r.passedTests,
+                warningTests: status === "warn" ? r.warningTests + 1 : r.warningTests,
+                failedTests: status === "fail" ? r.failedTests + 1 : r.failedTests,
+              };
+            })
+          );
+        } else if (event.type === "RUN_COMPLETED") {
+          setRuns((prev) =>
+            prev.map((r) =>
+              r.id === activeRunId
+                ? { ...r, status: "completed", finishedAt: event.timestamp || new Date().toISOString() }
+                : r
+            )
+          );
+        }
+      },
+      (err) => {
+        console.warn("WebSocket event error:", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [activeRunId, currentView, activeTab, isStreaming]);
 
   const handleCreateTarget = async (input: CreateTargetInput) => {
     await apiClient.createTarget(input);
@@ -118,15 +204,23 @@ export function App(): React.ReactElement {
   const handleDeleteTarget = async (id: string) => {
     await apiClient.deleteTarget(id);
     await fetchTargets();
+    await fetchRuns();
   };
 
   const handleTriggerRun = async (targetId: string) => {
-    await apiClient.triggerRun(targetId);
+    const res = await apiClient.triggerRun(targetId);
+    await fetchRuns();
+    setActiveRunId(res.runId);
+    setRunEvents([]);
+    switchTab("runs");
   };
 
   const handleSelectTarget = async (id: string): Promise<TargetDetail> => {
     return await apiClient.getTarget(id);
   };
+
+  const activeRun = runs.find((r) => r.id === activeRunId) || runs[0] || null;
+  const activeTarget = targets.find((t) => t.id === activeRun?.targetId);
 
   if (currentView === "landing") {
     return <LandingPage onSwitchToApp={() => switchView("app")} />;
@@ -196,7 +290,7 @@ export function App(): React.ReactElement {
               }`}
             />
             <span>
-              {isLiveConnected ? "ws://127.0.0.1:3001 (Live)" : "Demo Sandbox Mode"}
+              {isLiveConnected ? "ws://127.0.0.1:3001 (Live)" : "Connecting to backend..."}
             </span>
           </div>
         </div>
@@ -216,27 +310,33 @@ export function App(): React.ReactElement {
         )}
 
         {activeTab === "runs" && (
-          <div className="bg-white border border-zinc-200 rounded-lg p-8 text-center space-y-3 shadow-xs">
-            <div className="inline-flex p-3 rounded-full bg-zinc-50 border border-zinc-200 text-zinc-400">
-              <Terminal className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div className="space-y-1">
-              <h2 className="text-sm font-semibold text-zinc-900">
-                Test run monitor
-              </h2>
-              <p className="text-xs text-zinc-500 max-w-md mx-auto">
-                Start a run from the Targets tab to watch test progress and live events.
-              </p>
-            </div>
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => switchTab("targets")}
-                className="px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-medium transition-colors"
-              >
-                View targets
-              </button>
-            </div>
+          <div className="space-y-6">
+            <RunVisualizer
+              runs={runs}
+              activeRun={activeRun}
+              loading={loadingRuns}
+              onSelectRun={(id) => {
+                setActiveRunId(id);
+                setRunEvents([]);
+              }}
+              onRefresh={fetchRuns}
+              onTriggerNewRun={() => {
+                if (targets.length > 0) {
+                  void handleTriggerRun(targets[0].id);
+                } else {
+                  setIsIngestModalOpen(true);
+                }
+              }}
+              targetName={activeTarget?.name}
+            />
+
+            <EventTicker
+              runId={activeRun?.id || null}
+              events={runEvents}
+              streaming={isStreaming}
+              onToggleStreaming={() => setIsStreaming((prev) => !prev)}
+              onClearEvents={() => setRunEvents([])}
+            />
           </div>
         )}
 

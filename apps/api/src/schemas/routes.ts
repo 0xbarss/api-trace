@@ -246,3 +246,19 @@ export const getRunResultsSchema = {
     },
   },
 };
+
+export const listRunsSchema = {
+  querystring: {
+    type: "object",
+    properties: {
+      targetId: { type: "string", format: "uuid" },
+    },
+    additionalProperties: false,
+  },
+  response: {
+    200: {
+      type: "array",
+      items: getRunSchema.response[200],
+    },
+  },
+};

@@ -3,6 +3,8 @@ import { App } from "../App.js";
 import { Dialog } from "../components/Dialog.js";
 import { TargetCatalog } from "../components/TargetCatalog.js";
 import { TargetIngestionModal } from "../components/TargetIngestionModal.js";
+import { RunVisualizer } from "../components/RunVisualizer.js";
+import { EventTicker } from "../components/EventTicker.js";
 
 describe("Web Dashboard Workspace", () => {
   it("exports App component cleanly", () => {
@@ -17,5 +19,9 @@ describe("Web Dashboard Workspace", () => {
     expect(typeof TargetCatalog).toBe("function");
     expect(TargetIngestionModal).toBeDefined();
     expect(typeof TargetIngestionModal).toBe("function");
+    expect(RunVisualizer).toBeDefined();
+    expect(typeof RunVisualizer).toBe("function");
+    expect(EventTicker).toBeDefined();
+    expect(typeof EventTicker).toBe("function");
   });
 });

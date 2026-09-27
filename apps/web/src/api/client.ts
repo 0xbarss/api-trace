@@ -7,6 +7,8 @@ import type {
   CreateRunInput,
   CreateRunResponse,
   RunSummary,
+  TestFinding,
+  WebSocketRunEvent,
 } from "../types.js";
 
 const DEFAULT_API_BASE = "http://127.0.0.1:3001";
@@ -14,8 +16,6 @@ const DEFAULT_API_BASE = "http://127.0.0.1:3001";
 class ApiClient {
   private baseUrl: string;
   private isOnline: boolean | null = null;
-  private localTargets: TargetSummary[] = [];
-  private localDetails: Record<string, TargetDetail> = {};
 
   constructor(baseUrl: string = DEFAULT_API_BASE) {
     this.baseUrl = baseUrl;
@@ -32,7 +32,7 @@ class ApiClient {
   async checkHealth(): Promise<boolean> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500);
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
       const res = await fetch(`${this.baseUrl}/health`, {
         signal: controller.signal,
       });
@@ -50,36 +50,14 @@ class ApiClient {
   }
 
   async listTargets(): Promise<TargetSummary[]> {
-    const isLive = await this.checkHealth();
-    if (!isLive) {
-      return [...this.localTargets];
+    const res = await fetch(`${this.baseUrl}/api/targets`);
+    if (!res.ok) {
+      throw new Error(`Could not load targets (HTTP ${res.status})`);
     }
-
-    try {
-      const res = await fetch(`${this.baseUrl}/api/targets`);
-      if (!res.ok) {
-        throw new Error(`Could not load targets (HTTP ${res.status})`);
-      }
-      const data = (await res.json()) as TargetSummary[];
-      return data;
-    } catch {
-      return [...this.localTargets];
-    }
+    return (await res.json()) as TargetSummary[];
   }
 
   async getTarget(id: string): Promise<TargetDetail> {
-    const isLive = await this.checkHealth();
-    if (!isLive) {
-      const mockDetail = this.localDetails[id];
-      if (mockDetail) return mockDetail;
-      const target = this.localTargets.find((t) => t.id === id);
-      if (!target) throw new Error("Target not found");
-      return {
-        ...target,
-        endpoints: [],
-      };
-    }
-
     const res = await fetch(`${this.baseUrl}/api/targets/${encodeURIComponent(id)}`);
     if (!res.ok) {
       throw new Error(`Could not load target (HTTP ${res.status})`);
@@ -88,64 +66,6 @@ class ApiClient {
   }
 
   async createTarget(input: CreateTargetInput): Promise<CreateTargetResponse> {
-    const isLive = await this.checkHealth();
-    if (!isLive) {
-      const newId = `target-${Date.now()}`;
-      const newTarget: TargetSummary = {
-        id: newId,
-        name: input.name.trim(),
-        baseUrl: input.baseUrl.trim(),
-        specSource: input.specSource,
-        endpointsCount: 8,
-        riskScore: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      this.localTargets.unshift(newTarget);
-      this.localDetails[newId] = {
-        ...newTarget,
-        endpoints: [
-          {
-            id: `ep-${Date.now()}-1`,
-            targetId: newId,
-            method: "GET",
-            path: "/api/health",
-            operationId: "getHealth",
-            authType: "none",
-            parameters: [],
-            riskScore: 0,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: `ep-${Date.now()}-2`,
-            targetId: newId,
-            method: "POST",
-            path: "/api/auth/token",
-            operationId: "createToken",
-            authType: "none",
-            parameters: [],
-            riskScore: 10,
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: `ep-${Date.now()}-3`,
-            targetId: newId,
-            method: "GET",
-            path: "/api/users/{userId}",
-            operationId: "getUser",
-            authType: "bearer",
-            parameters: [{ name: "userId", in: "path", required: true }],
-            riskScore: 25,
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      };
-      return {
-        targetId: newId,
-        discoveredEndpointsCount: 8,
-      };
-    }
-
     const res = await fetch(`${this.baseUrl}/api/targets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -161,13 +81,6 @@ class ApiClient {
   }
 
   async deleteTarget(id: string): Promise<DeleteTargetResponse> {
-    const isLive = await this.checkHealth();
-    if (!isLive) {
-      this.localTargets = this.localTargets.filter((t) => t.id !== id);
-      delete this.localDetails[id];
-      return { success: true, id };
-    }
-
     const res = await fetch(`${this.baseUrl}/api/targets/${encodeURIComponent(id)}`, {
       method: "DELETE",
     });
@@ -179,16 +92,18 @@ class ApiClient {
     return (await res.json()) as DeleteTargetResponse;
   }
 
-  async triggerRun(targetId: string, input: CreateRunInput = {}): Promise<CreateRunResponse> {
-    const isLive = await this.checkHealth();
-    if (!isLive) {
-      return {
-        runId: `run-${Date.now()}`,
-        totalTests: 18,
-        status: "queued",
-      };
+  async listRuns(targetId?: string): Promise<RunSummary[]> {
+    const url = targetId
+      ? `${this.baseUrl}/api/runs?targetId=${encodeURIComponent(targetId)}`
+      : `${this.baseUrl}/api/runs`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Could not load runs (HTTP ${res.status})`);
     }
+    return (await res.json()) as RunSummary[];
+  }
 
+  async triggerRun(targetId: string, input: CreateRunInput = {}): Promise<CreateRunResponse> {
     const res = await fetch(`${this.baseUrl}/api/targets/${encodeURIComponent(targetId)}/runs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -209,6 +124,50 @@ class ApiClient {
       throw new Error(`Could not load run (HTTP ${res.status})`);
     }
     return (await res.json()) as RunSummary;
+  }
+
+  async getRunResults(runId: string): Promise<TestFinding[]> {
+    const res = await fetch(`${this.baseUrl}/api/runs/${encodeURIComponent(runId)}/results`);
+    if (!res.ok) {
+      throw new Error(`Could not load run results (HTTP ${res.status})`);
+    }
+    return (await res.json()) as TestFinding[];
+  }
+
+  subscribeRunStream(
+    runId: string,
+    onEvent: (ev: WebSocketRunEvent) => void,
+    onError?: (err: unknown) => void
+  ): () => void {
+    const wsProtocol = this.baseUrl.startsWith("https") ? "wss:" : "ws:";
+    const host = this.baseUrl.replace(/^https?:\/\//, "");
+    const ws = new WebSocket(`${wsProtocol}//${host}/api/runs/${encodeURIComponent(runId)}/stream`);
+
+    ws.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data as string) as WebSocketRunEvent;
+        onEvent(parsed);
+      } catch (e) {
+        console.error("Failed to parse websocket message:", e);
+      }
+    };
+
+    if (onError) {
+      ws.onerror = (e) => onError(e);
+    }
+
+    const pingTimer = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "PING" }));
+      }
+    }, 15000);
+
+    return () => {
+      clearInterval(pingTimer);
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close();
+      }
+    };
   }
 }
 

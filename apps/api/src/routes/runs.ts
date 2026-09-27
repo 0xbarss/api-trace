@@ -1,11 +1,21 @@
 import type { FastifyPluginAsync } from "fastify";
 import { RunService } from "../services/run-service.js";
-import { getRunSchema, getRunResultsSchema } from "../schemas/routes.js";
+import { getRunSchema, getRunResultsSchema, listRunsSchema } from "../schemas/routes.js";
 import { handleRunWebSocket } from "./websocket.js";
 import type { RunParams } from "../types.js";
 
 export const runsRoutes: FastifyPluginAsync = async (fastify) => {
   const runService = new RunService(fastify.db, fastify.queue);
+
+  fastify.get(
+    "/",
+    { schema: listRunsSchema },
+    async (request, reply) => {
+      const { targetId } = (request.query as { targetId?: string }) || {};
+      const runs = await runService.listRuns(targetId);
+      return reply.status(200).send(runs);
+    }
+  );
 
   fastify.get<{ Params: RunParams }>(
     "/:id",

@@ -109,3 +109,16 @@ export interface TestFinding {
   };
   createdAt: string;
 }
+
+export interface WebSocketRunEvent {
+  type: "CONNECTED" | "TEST_COMPLETED" | "RUN_COMPLETED" | "ERROR" | "PING" | "PONG";
+  runId?: string;
+  endpointId?: string;
+  result?: TestFinding;
+  status?: string;
+  totalTests?: number;
+  completedTests?: number;
+  timestamp?: string;
+  error?: string;
+  message?: string;
+}
