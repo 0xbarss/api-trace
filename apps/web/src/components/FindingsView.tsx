@@ -13,6 +13,7 @@ import {
   ExternalLink,
   ChevronDown,
   RotateCcw,
+  FileDown,
 } from "lucide-react";
 import type {
   RunSummary,
@@ -24,6 +25,7 @@ import { EndpointScorecard } from "./EndpointScorecard.js";
 import { LatencyDistribution } from "./LatencyDistribution.js";
 import { FindingModal } from "./FindingModal.js";
 import { apiClient } from "../api/client.js";
+import { useExport } from "../hooks/useExport.js";
 
 export interface FindingsViewProps {
   runs: RunSummary[];
@@ -150,6 +152,8 @@ export function FindingsView({
       return true;
     });
   }, [findings, statusFilter, severityFilter, categoryFilter, searchQuery]);
+
+  const { exportJson, exportCsv } = useExport(filteredFindings, activeRun?.id ?? null);
 
   const getMethodBadge = (method?: string) => {
     const m = (method || "GET").toUpperCase();
@@ -378,6 +382,30 @@ export function FindingsView({
                     className="w-full pl-8 pr-3 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-mono placeholder:text-zinc-400 focus:outline-hidden focus:border-zinc-400"
                   />
                 </div>
+
+                {/* Export buttons */}
+                {filteredFindings.length > 0 && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={exportJson}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-mono font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-colors"
+                      title="Export visible findings as JSON"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                      JSON
+                    </button>
+                    <button
+                      type="button"
+                      onClick={exportCsv}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs font-mono font-medium text-zinc-700 hover:bg-zinc-50 hover:border-zinc-300 transition-colors"
+                      title="Export visible findings as CSV"
+                    >
+                      <FileDown className="w-3.5 h-3.5" />
+                      CSV
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Finding Items List */}
