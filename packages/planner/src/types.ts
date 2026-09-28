@@ -1,6 +1,6 @@
 import type { EndpointParameter, TargetAuthProfiles } from "@apitrace/core";
 
-export type TestCategory = "security" | "performance" | "contract";
+export type TestCategory = "security" | "performance" | "contract" | "workflow";
 
 export interface TestJobPayload {
   runId: string;
@@ -16,6 +16,22 @@ export interface TestJobPayload {
   category: TestCategory;
   testName: string;
   config?: Record<string, unknown>;
+  scenario?: ScenarioDefinition;
+}
+
+export interface ScenarioStep {
+  name: string;
+  method: string;
+  path: string;
+  body?: Record<string, unknown>;
+  expectedStatus?: number[];
+  extract?: Record<string, string>;
+}
+
+export interface ScenarioDefinition {
+  name: string;
+  description: string;
+  steps: ScenarioStep[];
 }
 
 export interface PlannerEndpointInput {
@@ -66,4 +82,3 @@ export interface SchemaMutationCase {
   body: Record<string, unknown>;
   targetField?: string;
 }
-

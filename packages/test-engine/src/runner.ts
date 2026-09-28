@@ -8,6 +8,7 @@ import { HttpProbeClient, HttpProbeError } from "./http/client.js";
 import { runSecurityProbe } from "./security/index.js";
 import { runPerformanceProbe } from "./performance/index.js";
 import { runContractProbe } from "./contract/index.js";
+import { runScenarioProbe } from "./scenario/index.js";
 
 export const registeredRunners: RegisteredRunner[] = [
   {
@@ -112,6 +113,8 @@ export async function executeTestJob(
         return await runPerformanceProbe(job, probeClient);
       case "contract":
         return await runContractProbe(job, probeClient);
+      case "workflow":
+        return await runScenarioProbe(job, probeClient);
       default:
         return {
           status: "warn",

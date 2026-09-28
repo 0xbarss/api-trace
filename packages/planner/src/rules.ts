@@ -1,6 +1,6 @@
 import type { MatrixRule, PlannerEndpointInput, TestPlanOptions } from "./types.js";
 
-function buildAuthProfileConfig(options?: TestPlanOptions): Record<string, unknown> | undefined {
+export function buildAuthProfileConfig(options?: TestPlanOptions): Record<string, unknown> | undefined {
   if (!options?.authProfiles) {
     return options?.config ? { ...options.config } : undefined;
   }
