@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, AlertCircle, Loader2, ShieldCheck } from "lucide-react";
+import { X, AlertCircle, Loader2, ShieldCheck, Info } from "lucide-react";
 import type {
   AuthProfileSlot,
   AuthProfilesInput,
@@ -17,28 +17,36 @@ interface AuthProfilesModalProps {
 interface SlotDefinition {
   slot: AuthProfileSlot;
   label: string;
+  role: string;
   hint: string;
   namePlaceholder: string;
+  tokenPlaceholder: string;
 }
 
 const SLOTS: SlotDefinition[] = [
   {
     slot: "primary",
-    label: "Tenant A (Primary)",
-    hint: "The tenant whose data we try to reach from the other side.",
-    namePlaceholder: "Tenant A",
+    label: "Primary user",
+    role: "Your main account. The engine uses this token to call authenticated endpoints, check whether numeric fields can be overwritten, and scan responses for exposed card data.",
+    hint: "The account whose data belongs to them.",
+    namePlaceholder: "alice",
+    tokenPlaceholder: "eyJhbGci… or my-api-key-123",
   },
   {
     slot: "secondary",
-    label: "Tenant B (Secondary)",
-    hint: "Should get turned away when it asks for Tenant A's data.",
-    namePlaceholder: "Tenant B",
+    label: "Second user",
+    role: "A different account. The engine signs in as this user and tries to read the primary user's resources. A well-secured API should block it.",
+    hint: "Someone who should not be able to see the primary user's data.",
+    namePlaceholder: "bob",
+    tokenPlaceholder: "eyJhbGci… or another-api-key",
   },
   {
     slot: "unprivileged",
-    label: "Unprivileged user",
-    hint: "A regular user, used to knock on admin routes. Skip it and we'll use Tenant B.",
-    namePlaceholder: "Regular user",
+    label: "Low-privilege user",
+    role: "A regular customer account with no admin rights. Used to test whether admin and audit routes turn away non-admin callers. Leave this blank and the engine will reuse the second user.",
+    hint: "A standard account with no elevated permissions.",
+    namePlaceholder: "charlie",
+    tokenPlaceholder: "eyJhbGci… or low-priv-key",
   },
 ];
 
@@ -61,7 +69,7 @@ export function buildAuthProfilesInput(draft: DraftValues): AuthProfilesInput {
       continue;
     }
     if (!name || !token) {
-      throw new Error(`Add both a name and a token for ${label}, or clear both.`);
+      throw new Error(`Add both a name and a token for "${label}", or clear both.`);
     }
     result[slot] = { name, token };
   }
@@ -138,13 +146,14 @@ export function AuthProfilesModal({
         className="bg-white rounded-xl border border-zinc-200 shadow-xl max-w-xl w-full overflow-hidden flex flex-col max-h-[90vh] cursor-default"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
           <div>
             <h2 className="text-sm font-semibold text-zinc-900 tracking-tight">
-              Auth profiles
+              Auth profiles — {targetName}
             </h2>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Tokens for {targetName}. We use them to check that tenants can't see each other's data and that regular users can't reach admin routes.
+              Paste the tokens for {targetName}. The engine uses them to run cross-tenant and privilege-escalation checks.
             </p>
           </div>
           <button
@@ -156,10 +165,24 @@ export function AuthProfilesModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
-          {SLOTS.map(({ slot, label, hint, namePlaceholder }) => (
+        {/* Token format note */}
+        <div className="mx-5 mt-4 flex items-start gap-2 rounded-md bg-sky-50 border border-sky-100 px-3 py-2 text-[11px] text-sky-700">
+          <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+          <span>
+            Paste the raw token, no <code className="font-mono bg-sky-100 px-0.5 rounded">Bearer </code> prefix. JWT tokens and static API keys both work.
+          </span>
+        </div>
+
+        <form onSubmit={handleSubmit} className="px-5 pb-5 pt-3 space-y-5 overflow-y-auto">
+          {/* Column headers */}
+          <div className="grid grid-cols-2 gap-2 px-0">
+            <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider pl-0.5">Display name</span>
+            <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider pl-0.5">Token / API key</span>
+          </div>
+
+          {SLOTS.map(({ slot, label, role, hint, namePlaceholder, tokenPlaceholder }) => (
             <fieldset key={slot} className="space-y-1.5">
-              <legend className="text-xs font-medium text-zinc-700 flex items-center gap-1.5">
+              <legend className="text-xs font-semibold text-zinc-800 flex items-center gap-2">
                 {label}
                 {saved[slot]?.hasToken && (
                   <span className="inline-flex items-center gap-1 text-[10px] font-normal text-emerald-700">
@@ -168,21 +191,23 @@ export function AuthProfilesModal({
                   </span>
                 )}
               </legend>
-              <p className="text-[11px] text-zinc-400">{hint}</p>
+              <p className="text-[11px] text-zinc-500 leading-relaxed">{role}</p>
+              <p className="text-[10px] text-zinc-400 italic">{hint}</p>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="text"
-                  aria-label={`${label} name`}
+                  aria-label={`${label} display name`}
                   placeholder={namePlaceholder}
                   value={draft[slot].name}
                   onChange={(e) => updateField(slot, "name", e.target.value)}
                   className="h-8 px-3 rounded-md bg-zinc-50 border border-zinc-200 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-colors"
                 />
                 <input
-                  type="password"
+                  type="text"
                   autoComplete="off"
+                  spellCheck={false}
                   aria-label={`${label} token`}
-                  placeholder={saved[slot]?.hasToken ? "Paste again to keep" : "Bearer token"}
+                  placeholder={saved[slot]?.hasToken ? "Paste again to update" : tokenPlaceholder}
                   value={draft[slot].token}
                   onChange={(e) => updateField(slot, "token", e.target.value)}
                   className="h-8 px-3 rounded-md bg-zinc-50 border border-zinc-200 text-xs font-mono text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-emerald-500 focus:bg-white transition-colors"
@@ -192,8 +217,7 @@ export function AuthProfilesModal({
           ))}
 
           <p className="text-[11px] text-zinc-400">
-            Saving replaces everything here. We never show saved tokens again, so paste the
-            token again for any profile you want to keep.
+            Only the primary token is needed for most checks. Saving overwrites what was stored, and tokens are never shown again after that.
           </p>
 
           {error && (

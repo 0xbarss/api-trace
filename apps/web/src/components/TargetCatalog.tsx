@@ -16,29 +16,37 @@ import {
   CheckCircle,
   AlertTriangle,
   ShieldCheck,
+  Clock,
+  XCircle,
+  CheckCircle2,
+  ArrowRight,
 } from "lucide-react";
-import type { TargetSummary, TargetDetail, EndpointSummary, AuthProfilesInput } from "../types.js";
+import type { TargetSummary, TargetDetail, EndpointSummary, AuthProfilesInput, RunSummary } from "../types.js";
 import { AuthProfilesModal } from "./AuthProfilesModal.js";
 import { Dialog } from "./Dialog.js";
 
 interface TargetCatalogProps {
   targets: TargetSummary[];
+  runs: RunSummary[];
   loading: boolean;
   onOpenIngestModal: () => void;
   onDeleteTarget: (id: string) => Promise<void>;
   onTriggerRun: (targetId: string) => Promise<void>;
   onSelectTarget: (id: string) => Promise<TargetDetail>;
   onUpdateAuthProfiles: (id: string, profiles: AuthProfilesInput) => Promise<void>;
+  onGoToRun: (runId: string) => void;
 }
 
 export function TargetCatalog({
   targets,
+  runs,
   loading,
   onOpenIngestModal,
   onDeleteTarget,
   onTriggerRun,
   onSelectTarget,
   onUpdateAuthProfiles,
+  onGoToRun,
 }: TargetCatalogProps): React.ReactElement {
   const [searchTerm, setSearchTerm] = useState("");
   const [inspectingTarget, setInspectingTarget] = useState<TargetDetail | null>(null);
@@ -315,6 +323,55 @@ export function TargetCatalog({
                     <span>{target.endpointsCount} endpoints</span>
                   </div>
                 </div>
+
+                {/* Recent runs for this target */}
+                {(() => {
+                  const targetRuns = runs
+                    .filter((r) => r.targetId === target.id)
+                    .slice(0, 3);
+                  if (targetRuns.length === 0) return null;
+                  return (
+                    <div className="mt-2 pt-2 border-t border-zinc-100 space-y-1">
+                      <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider mb-1">
+                        Recent runs
+                      </div>
+                      {targetRuns.map((run) => (
+                        <button
+                          key={run.id}
+                          type="button"
+                          onClick={() => onGoToRun(run.id)}
+                          className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-zinc-50 transition-colors group"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {run.status === "completed" && run.failedTests === 0 && (
+                              <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                            )}
+                            {run.status === "completed" && run.failedTests > 0 && (
+                              <XCircle className="w-3 h-3 text-rose-500 shrink-0" />
+                            )}
+                            {(run.status === "running" || run.status === "queued") && (
+                              <Clock className="w-3 h-3 text-amber-500 shrink-0 animate-pulse" />
+                            )}
+                            <span className="text-[11px] font-mono text-zinc-500 truncate">
+                              {run.id.slice(0, 8)}
+                            </span>
+                            {run.status === "completed" && (
+                              <span className="text-[10px] font-mono text-zinc-400">
+                                {run.failedTests}F / {run.warningTests}W / {run.passedTests}P
+                              </span>
+                            )}
+                            {run.status !== "completed" && (
+                              <span className="text-[10px] font-mono text-zinc-400 capitalize">
+                                {run.status}
+                              </span>
+                            )}
+                          </div>
+                          <ArrowRight className="w-3 h-3 text-zinc-300 group-hover:text-zinc-500 transition-colors shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Action Buttons */}

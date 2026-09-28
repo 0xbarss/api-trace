@@ -21,6 +21,6 @@ describe("AuthProfilesModal draft handling", () => {
     const draft = createEmptyDraft();
     draft.secondary = { name: "Tenant B", token: "" };
 
-    expect(() => buildAuthProfilesInput(draft)).toThrow("Add both a name and a token for Tenant B (Secondary), or clear both.");
+    expect(() => buildAuthProfilesInput(draft)).toThrow("Add both a name and a token for \"Second user\", or clear both.");
   });
 });

@@ -307,12 +307,17 @@ export function App(): React.ReactElement {
         {activeTab === "targets" && (
           <TargetCatalog
             targets={targets}
+            runs={runs}
             loading={loadingTargets}
             onOpenIngestModal={() => setIsIngestModalOpen(true)}
             onDeleteTarget={handleDeleteTarget}
             onTriggerRun={handleTriggerRun}
             onSelectTarget={handleSelectTarget}
             onUpdateAuthProfiles={handleUpdateAuthProfiles}
+            onGoToRun={(runId) => {
+              setActiveRunId(runId);
+              switchTab("findings");
+            }}
           />
         )}
 
