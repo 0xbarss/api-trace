@@ -8,4 +8,5 @@ export * from "./fuzzing/index.js";
 export * from "./fuzzing/payloads.js";
 export * from "./scenario/index.js";
 export * from "./scenario/jsonpath.js";
+export * from "./protocol/index.js";
 export * from "./runner.js";

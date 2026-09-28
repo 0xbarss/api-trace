@@ -73,7 +73,8 @@ export const matrixRules: MatrixRule[] = [
     name: "bfla_privilege_escalation",
     category: "security",
     description: "Check that admin, audit, and system routes turn away regular users",
-    matches: (endpoint) => isAuthRequired(endpoint) && isAdminRoute(endpoint),
+    // Matches on path alone: the flaw is that these routes expose admin data without requiring auth.
+    matches: isAdminRoute,
     buildConfig: (_endpoint, options) => buildAuthProfileConfig(options),
   },
   {
@@ -81,6 +82,14 @@ export const matrixRules: MatrixRule[] = [
     category: "security",
     description: "Probe mutating endpoints for unintended property injection",
     matches: isMutatingWithBody,
+    buildConfig: (_endpoint, options) => buildAuthProfileConfig(options),
+  },
+  {
+    name: "business_logic_state_injection",
+    category: "security",
+    description: "Probe workflow endpoints for client-controlled state field injection",
+    matches: isMutatingWithBody,
+    buildConfig: (_endpoint, options) => buildAuthProfileConfig(options),
   },
   {
     name: "cors_wildcard_check",
@@ -135,5 +144,30 @@ export const matrixRules: MatrixRule[] = [
     category: "contract",
     description: "Verify mutating endpoint rejects malformed schemas and boundary violations with HTTP 400/422",
     matches: isMutatingWithBody,
+  },
+  {
+    name: "http_verb_tampering",
+    category: "security",
+    description: "Verify auth middleware applies uniformly across HTTP methods not declared for this route",
+    matches: isAuthRequired,
+  },
+  {
+    name: "content_type_confusion",
+    category: "security",
+    description: "Probe request body parsing for XML entity expansion and missing content-type handling",
+    matches: isMutatingWithBody,
+  },
+  {
+    name: "header_injection_crlf",
+    category: "security",
+    description: "Check whether CRLF sequences in reflected header values are neutralized",
+    matches: () => true,
+  },
+  {
+    name: "sensitive_data_exposure",
+    category: "security",
+    description: "Scan authenticated GET response bodies for unmasked card numbers, CVV codes, and similar PII",
+    matches: (endpoint) => isAuthRequired(endpoint) && endpoint.method.toUpperCase() === "GET" && endpoint.responseSchema != null,
+    buildConfig: (_endpoint, options) => buildAuthProfileConfig(options),
   },
 ];

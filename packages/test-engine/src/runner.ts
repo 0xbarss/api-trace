@@ -95,6 +95,36 @@ export const registeredRunners: RegisteredRunner[] = [
     description: "Verify mutating endpoint rejects malformed schemas and boundary violations with HTTP 400/422",
     run: (job, opts) => executeTestJob(job, opts),
   },
+  {
+    name: "http_verb_tampering",
+    category: "security",
+    description: "Verify auth middleware applies uniformly across HTTP methods not declared for this route",
+    run: (job, opts) => executeTestJob(job, opts),
+  },
+  {
+    name: "content_type_confusion",
+    category: "security",
+    description: "Probe request body parsing for XML entity expansion and missing content-type handling",
+    run: (job, opts) => executeTestJob(job, opts),
+  },
+  {
+    name: "header_injection_crlf",
+    category: "security",
+    description: "Check whether CRLF sequences in reflected header values are neutralized",
+    run: (job, opts) => executeTestJob(job, opts),
+  },
+  {
+    name: "business_logic_state_injection",
+    category: "security",
+    description: "Probe workflow endpoints for client-controlled state field injection",
+    run: (job, opts) => executeTestJob(job, opts),
+  },
+  {
+    name: "sensitive_data_exposure",
+    category: "security",
+    description: "Scan authenticated GET response bodies for unmasked card numbers, CVV codes, and similar PII",
+    run: (job, opts) => executeTestJob(job, opts),
+  },
 ];
 
 export async function executeTestJob(

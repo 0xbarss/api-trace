@@ -4,6 +4,7 @@ import type { TestExecutionResult } from "../types.js";
 import type { HttpProbeClient } from "../http/client.js";
 import { interpolatePath, truncate, buildSampleBody, buildAuthHeaders } from "../utils.js";
 import { runPolyglotFuzzProbe } from "../fuzzing/index.js";
+import { runProtocolProbe } from "../protocol/index.js";
 
 const CROSS_TENANT_RESOURCE_ID = "500001";
 
@@ -335,7 +336,7 @@ export async function runMassAssignmentProbe(
   const targetUrl = client.buildUrl(job.baseUrl, path);
   const sampleBody = buildSampleBody(job.requestSchema) ?? {};
 
-  const probePayload: Record<string, unknown> = {
+  const adminProbePayload: Record<string, unknown> = {
     ...sampleBody,
     role: "admin",
     isAdmin: true,
@@ -343,59 +344,99 @@ export async function runMassAssignmentProbe(
     accessLevel: 9999,
   };
 
-  const res = await client.send(job.baseUrl, {
+  const anonRes = await client.send(job.baseUrl, {
     method: job.method,
     path,
-    body: probePayload,
+    body: adminProbePayload,
   });
 
-  let vulnerable = false;
-  if (res.json && typeof res.json === "object") {
-    const jsonRecord = res.json as Record<string, unknown>;
+  if (anonRes.json && typeof anonRes.json === "object") {
+    const jsonRecord = anonRes.json as Record<string, unknown>;
     if (
       jsonRecord["role"] === "admin" ||
       jsonRecord["isAdmin"] === true ||
       jsonRecord["isSuperuser"] === true
     ) {
-      vulnerable = true;
+      return {
+        status: "fail",
+        severity: "high",
+        latencyMs: anonRes.latencyMs,
+        detail: {
+          evidence: "Endpoint echoed back injected administrative properties (mass assignment vulnerability).",
+          requestSent: {
+            method: job.method,
+            url: targetUrl,
+            body: adminProbePayload,
+          },
+          responseReceived: {
+            status: anonRes.statusCode,
+            headers: anonRes.headers,
+            body: truncate(anonRes.body),
+          },
+          remediation: "Implement strict input DTO allow-lists and sanitize input properties before model binding.",
+        },
+      };
     }
   }
 
-  if (vulnerable) {
-    return {
-      status: "fail",
-      severity: "high",
-      latencyMs: res.latencyMs,
-      detail: {
-        evidence: "Endpoint echoed back injected administrative properties (mass assignment vulnerability).",
-        requestSent: {
-          method: job.method,
-          url: targetUrl,
-          body: probePayload,
-        },
-        responseReceived: {
-          status: res.statusCode,
-          headers: res.headers,
-          body: truncate(res.body),
-        },
-        remediation: "Implement strict input DTO allow-lists and sanitize input properties before model binding.",
-      },
+  // Auth-aware numeric field injection: catches endpoints that silently write
+  // attacker-supplied financial fields without echoing them back.
+  const authProfiles = job.config?.authProfiles as TargetAuthProfiles | undefined;
+  const primaryAuth = authProfiles?.primary;
+
+  if (primaryAuth) {
+    const numericProbePayload: Record<string, unknown> = {
+      ...sampleBody,
+      balance: 999999999,
+      overdraftLimit: 999999999,
+      creditLimit: 999999999,
+      price: 0.01,
+      amount: 999999999,
     };
+
+    const authRes = await client.send(job.baseUrl, {
+      method: job.method,
+      path,
+      headers: buildAuthHeaders(primaryAuth),
+      body: numericProbePayload,
+    });
+
+    if (authRes.statusCode >= 200 && authRes.statusCode < 300) {
+      return {
+        status: "fail",
+        severity: "high",
+        latencyMs: authRes.latencyMs,
+        detail: {
+          evidence: `Endpoint accepted injected sensitive numeric fields and returned HTTP ${authRes.statusCode}. The server may have written attacker-supplied values directly to the database.`,
+          requestSent: {
+            method: job.method,
+            url: targetUrl,
+            body: numericProbePayload,
+          },
+          responseReceived: {
+            status: authRes.statusCode,
+            headers: authRes.headers,
+            body: truncate(authRes.body),
+          },
+          remediation: "Validate and allowlist every writable field server-side; reject or ignore unexpected fields regardless of the caller's auth status.",
+        },
+      };
+    }
   }
 
   return {
     status: "pass",
     severity: "info",
-    latencyMs: res.latencyMs,
+    latencyMs: anonRes.latencyMs,
     detail: {
-      evidence: `Endpoint safely rejected or filtered unauthorized fields (HTTP ${res.statusCode}).`,
+      evidence: `Endpoint safely rejected or filtered unauthorized fields (HTTP ${anonRes.statusCode}).`,
       requestSent: {
         method: job.method,
         url: targetUrl,
       },
       responseReceived: {
-        status: res.statusCode,
-        headers: res.headers,
+        status: anonRes.statusCode,
+        headers: anonRes.headers,
       },
     },
   };
@@ -576,6 +617,47 @@ export async function runInfoLeakageCheck(
     };
   }
 
+  // GET endpoints ignore request bodies, so also probe query params with a malformed value.
+  if (job.method.toUpperCase() === "GET") {
+    const queryParams: Record<string, string> = { q: "'\";--" };
+    if (job.parameters) {
+      for (const p of job.parameters) {
+        if (p.in === "query") {
+          queryParams[p.name] = "'\";--";
+        }
+      }
+    }
+
+    const queryRes = await client.send(job.baseUrl, {
+      method: "GET",
+      path,
+      query: queryParams,
+    });
+
+    const queryMatchedPattern = KNOWN_STACK_PATTERNS.find((pattern) => pattern.test(queryRes.body));
+
+    if (queryMatchedPattern) {
+      return {
+        status: "fail",
+        severity: "high",
+        latencyMs: queryRes.latencyMs,
+        detail: {
+          evidence: `Response body leaked internal trace or DBMS error signature via query parameter: ${queryMatchedPattern.toString()}`,
+          requestSent: {
+            method: "GET",
+            url: client.buildUrl(job.baseUrl, path, queryParams),
+          },
+          responseReceived: {
+            status: queryRes.statusCode,
+            headers: queryRes.headers,
+            body: truncate(queryRes.body),
+          },
+          remediation: "Sanitize error responses in production using a centralized error handler returning opaque error correlation IDs.",
+        },
+      };
+    }
+  }
+
   return {
     status: "pass",
     severity: "info",
@@ -677,6 +759,172 @@ export async function runInjectionSignalProbe(
   };
 }
 
+export async function runBusinessLogicStateInjectionProbe(
+  job: TestJobPayload,
+  client: HttpProbeClient
+): Promise<TestExecutionResult> {
+  const path = interpolatePath(job.path, job.parameters);
+  const targetUrl = client.buildUrl(job.baseUrl, path);
+  const sampleBody = buildSampleBody(job.requestSchema) ?? {};
+
+  const stateFields: Record<string, unknown> = {
+    ...sampleBody,
+    status: "force_approved_by_attacker",
+    state: "approved",
+    approved: true,
+    verified: true,
+    cleared: true,
+  };
+
+  const authProfiles = job.config?.authProfiles as TargetAuthProfiles | undefined;
+  const primaryAuth = authProfiles?.primary;
+
+  const res = await client.send(job.baseUrl, {
+    method: job.method,
+    path,
+    headers: primaryAuth ? buildAuthHeaders(primaryAuth) : undefined,
+    body: stateFields,
+  });
+
+  if (res.statusCode >= 200 && res.statusCode < 300) {
+    return {
+      status: "fail",
+      severity: "high",
+      latencyMs: res.latencyMs,
+      detail: {
+        evidence: `Endpoint accepted attacker-controlled state fields and returned HTTP ${res.statusCode}. The server may have bypassed its own state machine enforcement.`,
+        requestSent: {
+          method: job.method,
+          url: targetUrl,
+          body: stateFields,
+        },
+        responseReceived: {
+          status: res.statusCode,
+          headers: res.headers,
+          body: truncate(res.body),
+        },
+        remediation: "Enforce state transitions server-side; never trust client-supplied status or approval fields.",
+      },
+    };
+  }
+
+  return {
+    status: "pass",
+    severity: "info",
+    latencyMs: res.latencyMs,
+    detail: {
+      evidence: `Endpoint rejected attacker-controlled state fields (HTTP ${res.statusCode}).`,
+      requestSent: {
+        method: job.method,
+        url: targetUrl,
+      },
+      responseReceived: {
+        status: res.statusCode,
+        headers: res.headers,
+      },
+    },
+  };
+}
+
+const PAN_PATTERNS = [
+  /\b4[0-9]{12}(?:[0-9]{3})?\b/,
+  /\b5[1-5][0-9]{14}\b/,
+  /\b3[47][0-9]{13}\b/,
+  /\b6(?:011|5[0-9]{2})[0-9]{12}\b/,
+];
+
+const CVV_PATTERN = /"cvv"\s*:\s*"\d{3,4}"/i;
+
+export async function runSensitiveDataExposureCheck(
+  job: TestJobPayload,
+  client: HttpProbeClient
+): Promise<TestExecutionResult> {
+  const path = interpolatePath(job.path, job.parameters);
+  const targetUrl = client.buildUrl(job.baseUrl, path);
+
+  const authProfiles = job.config?.authProfiles as TargetAuthProfiles | undefined;
+  const primaryAuth = authProfiles?.primary;
+
+  if (!primaryAuth) {
+    return {
+      status: "warn",
+      severity: "medium",
+      latencyMs: 0,
+      detail: {
+        evidence: "Skipped: no primary auth profile configured, so the endpoint could not be fetched as an authenticated caller.",
+        remediation: "Add a primary auth token under Auth profiles for this target, then run the tests again.",
+      },
+    };
+  }
+
+  const res = await client.send(job.baseUrl, {
+    method: job.method,
+    path,
+    headers: buildAuthHeaders(primaryAuth),
+  });
+
+  if (res.statusCode < 200 || res.statusCode >= 300) {
+    return {
+      status: "warn",
+      severity: "low",
+      latencyMs: res.latencyMs,
+      detail: {
+        evidence: `Could not fetch a successful response to scan (HTTP ${res.statusCode}).`,
+        requestSent: { method: job.method, url: targetUrl },
+        responseReceived: { status: res.statusCode, headers: res.headers },
+      },
+    };
+  }
+
+  const matchedPan = PAN_PATTERNS.find((p) => p.test(res.body));
+  if (matchedPan) {
+    return {
+      status: "fail",
+      severity: "critical",
+      latencyMs: res.latencyMs,
+      detail: {
+        evidence: "Response body contains what appears to be an unmasked payment card number (PAN).",
+        requestSent: { method: job.method, url: targetUrl },
+        responseReceived: {
+          status: res.statusCode,
+          headers: res.headers,
+          body: truncate(res.body),
+        },
+        remediation: "Mask PANs to the last four digits before including them in API responses.",
+      },
+    };
+  }
+
+  if (CVV_PATTERN.test(res.body)) {
+    return {
+      status: "fail",
+      severity: "critical",
+      latencyMs: res.latencyMs,
+      detail: {
+        evidence: "Response body contains a raw CVV code field.",
+        requestSent: { method: job.method, url: targetUrl },
+        responseReceived: {
+          status: res.statusCode,
+          headers: res.headers,
+          body: truncate(res.body),
+        },
+        remediation: "Never return CVV codes in API responses. Remove the field entirely.",
+      },
+    };
+  }
+
+  return {
+    status: "pass",
+    severity: "info",
+    latencyMs: res.latencyMs,
+    detail: {
+      evidence: "No unmasked card numbers or CVV codes detected in the response body.",
+      requestSent: { method: job.method, url: targetUrl },
+      responseReceived: { status: res.statusCode, headers: res.headers },
+    },
+  };
+}
+
 export async function runSecurityProbe(
   job: TestJobPayload,
   client: HttpProbeClient
@@ -692,6 +940,8 @@ export async function runSecurityProbe(
       return runBflaPrivilegeEscalationCheck(job, client);
     case "mass_assignment_probe":
       return runMassAssignmentProbe(job, client);
+    case "business_logic_state_injection":
+      return runBusinessLogicStateInjectionProbe(job, client);
     case "cors_wildcard_check":
       return runCorsWildcardCheck(job, client);
     case "rate_limit_burst_presence":
@@ -702,6 +952,12 @@ export async function runSecurityProbe(
       return runInjectionSignalProbe(job, client);
     case "polyglot_fuzz_injection_matrix":
       return runPolyglotFuzzProbe(job, client);
+    case "sensitive_data_exposure":
+      return runSensitiveDataExposureCheck(job, client);
+    case "http_verb_tampering":
+    case "content_type_confusion":
+    case "header_injection_crlf":
+      return runProtocolProbe(job, client);
     default:
       return runAuthMissingCheck(job, client);
   }
