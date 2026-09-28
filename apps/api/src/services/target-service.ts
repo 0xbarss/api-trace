@@ -1,12 +1,21 @@
 import { eq, desc, sql } from "drizzle-orm";
 import { discoverApi } from "@apitrace/discovery";
-import { targets, endpoints, type Database, type NewEndpoint } from "@apitrace/core";
+import {
+  targets,
+  endpoints,
+  type Database,
+  type NewEndpoint,
+  type TargetAuthProfile,
+  type TargetAuthProfiles,
+} from "@apitrace/core";
 import { HttpError } from "../plugins/error-handler.js";
 import type {
   CreateTargetBody,
   CreateTargetResponse,
   TargetSummaryResponse,
   TargetDetailResponse,
+  TargetAuthProfilesSummary,
+  UpdateAuthProfilesBody,
 } from "../types.js";
 
 function formatSpecError(err: unknown, specSource: string): string {
@@ -46,6 +55,28 @@ function formatSpecError(err: unknown, specSource: string): string {
   return `Failed to parse OpenAPI specification: ${cleaned}`;
 }
 
+function summarizeAuthProfile(profile?: TargetAuthProfile) {
+  if (!profile) {
+    return undefined;
+  }
+  return { name: profile.name, hasToken: Boolean(profile.token) };
+}
+
+function summarizeAuthProfiles(profiles: TargetAuthProfiles | null): TargetAuthProfilesSummary {
+  if (!profiles) {
+    return {};
+  }
+  return {
+    primary: summarizeAuthProfile(profiles.primary),
+    secondary: summarizeAuthProfile(profiles.secondary),
+    unprivileged: summarizeAuthProfile(profiles.unprivileged),
+  };
+}
+
+function hasAnyAuthProfile(profiles: TargetAuthProfiles | null): boolean {
+  return Boolean(profiles?.primary || profiles?.secondary || profiles?.unprivileged);
+}
+
 export class TargetService {
   constructor(private readonly db: Database) {}
 
@@ -76,6 +107,7 @@ export class TargetService {
         name: trimmedName,
         baseUrl: normalizedBaseUrl,
         specSource: body.specSource,
+        authProfiles: body.authProfiles ?? null,
       })
       .returning();
 
@@ -125,6 +157,7 @@ export class TargetService {
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
       endpointsCount: countMap.get(t.id) ?? 0,
+      hasAuthProfiles: hasAnyAuthProfile(t.authProfiles),
     }));
   }
 
@@ -148,7 +181,44 @@ export class TargetService {
       createdAt: target.createdAt.toISOString(),
       updatedAt: target.updatedAt.toISOString(),
       endpoints: targetEndpoints,
+      authProfiles: summarizeAuthProfiles(target.authProfiles),
     };
+  }
+
+  async updateAuthProfiles(
+    id: string,
+    body: UpdateAuthProfilesBody
+  ): Promise<TargetAuthProfilesSummary> {
+    const [target] = await this.db.select().from(targets).where(eq(targets.id, id));
+    if (!target) {
+      throw new HttpError(404, `Target with id '${id}' not found`);
+    }
+
+    const normalizeProfile = (profile?: TargetAuthProfile): TargetAuthProfile | undefined => {
+      if (!profile) {
+        return undefined;
+      }
+      const trimmedName = profile.name.trim();
+      const trimmedToken = profile.token.trim();
+      if (!trimmedName || !trimmedToken) {
+        throw new HttpError(400, "Every auth profile needs a name and a token");
+      }
+      return { name: trimmedName, token: trimmedToken, headers: profile.headers };
+    };
+
+    const normalizedProfiles: TargetAuthProfiles = {
+      primary: normalizeProfile(body.primary),
+      secondary: normalizeProfile(body.secondary),
+      unprivileged: normalizeProfile(body.unprivileged),
+    };
+
+    const [updated] = await this.db
+      .update(targets)
+      .set({ authProfiles: normalizedProfiles, updatedAt: new Date() })
+      .where(eq(targets.id, id))
+      .returning();
+
+    return summarizeAuthProfiles(updated.authProfiles);
   }
 
   async deleteTarget(id: string): Promise<boolean> {

@@ -1,10 +1,24 @@
-import type { Endpoint, TestResultDetail } from "@apitrace/core";
+import type { Endpoint, TestResultDetail, TargetAuthProfiles } from "@apitrace/core";
 
 export interface CreateTargetBody {
   name: string;
   baseUrl: string;
   specSource: string;
+  authProfiles?: TargetAuthProfiles;
 }
+
+export interface TargetAuthProfileSummary {
+  name: string;
+  hasToken: boolean;
+}
+
+export interface TargetAuthProfilesSummary {
+  primary?: TargetAuthProfileSummary;
+  secondary?: TargetAuthProfileSummary;
+  unprivileged?: TargetAuthProfileSummary;
+}
+
+export type UpdateAuthProfilesBody = TargetAuthProfiles;
 
 export interface TargetParams {
   id: string;
@@ -18,6 +32,7 @@ export interface TargetSummaryResponse {
   createdAt: string;
   updatedAt: string;
   endpointsCount: number;
+  hasAuthProfiles: boolean;
 }
 
 export interface TargetDetailResponse {
@@ -28,6 +43,7 @@ export interface TargetDetailResponse {
   createdAt: string;
   updatedAt: string;
   endpoints: Endpoint[];
+  authProfiles: TargetAuthProfilesSummary;
 }
 
 export interface DeleteTargetResponse {

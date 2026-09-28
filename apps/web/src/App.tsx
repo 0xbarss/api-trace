@@ -20,6 +20,7 @@ import type {
   TargetSummary,
   TargetDetail,
   CreateTargetInput,
+  AuthProfilesInput,
   RunSummary,
   WebSocketRunEvent,
   TestFinding,
@@ -219,6 +220,11 @@ export function App(): React.ReactElement {
     switchTab("runs");
   };
 
+  const handleUpdateAuthProfiles = async (id: string, profiles: AuthProfilesInput) => {
+    await apiClient.updateAuthProfiles(id, profiles);
+    await fetchTargets();
+  };
+
   const handleSelectTarget = async (id: string): Promise<TargetDetail> => {
     return await apiClient.getTarget(id);
   };
@@ -306,6 +312,7 @@ export function App(): React.ReactElement {
             onDeleteTarget={handleDeleteTarget}
             onTriggerRun={handleTriggerRun}
             onSelectTarget={handleSelectTarget}
+            onUpdateAuthProfiles={handleUpdateAuthProfiles}
           />
         )}
 

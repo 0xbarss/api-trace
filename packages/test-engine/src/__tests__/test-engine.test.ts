@@ -11,6 +11,7 @@ import {
   runAuthMissingCheck,
   runAuthMalformedCheck,
   runBolaUnauthorizedAccessCheck,
+  runBflaPrivilegeEscalationCheck,
   runMassAssignmentProbe,
   runCorsWildcardCheck,
   runRateLimitBurstCheck,
@@ -78,22 +79,64 @@ describe("Test Engine & Probe Suite", () => {
         return;
       }
 
-      // Object access route for BOLA testing
-      if (pathname.startsWith("/users/")) {
-        const id = pathname.replace("/users/", "");
-        if (id === "99999999") {
-          // Insecure BOLA simulation: leaks object data without permission check
-          if (url.searchParams.get("vulnerable") === "true") {
-            res.writeHead(200, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ id: 99999999, secret: "leaked_data" }));
-            return;
-          }
-          res.writeHead(404, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "User not found" }));
+      // Dual-tenant object access route for BOLA testing
+      if (pathname.startsWith("/tenant-objects/")) {
+        const auth = req.headers["authorization"];
+        if (!auth) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Unauthorized" }));
           return;
         }
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ id: Number(id), name: "User" }));
+        // Insecure BOLA simulation: any caller with a token sees the resource
+        if (url.searchParams.get("vulnerable") === "true") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ id: pathname.replace("/tenant-objects/", ""), secret: "leaked_data" }));
+          return;
+        }
+        if (auth === "Bearer token-a") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ id: pathname.replace("/tenant-objects/", ""), owner: "tenant-a" }));
+          return;
+        }
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Forbidden" }));
+        return;
+      }
+
+      // Administrative route for BFLA testing
+      if (pathname === "/admin/audit-search") {
+        const auth = req.headers["authorization"];
+        if (!auth) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Unauthorized" }));
+          return;
+        }
+        // Insecure BFLA simulation: any authenticated caller reaches the admin route
+        if (url.searchParams.get("vulnerable") === "true") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ logs: [] }));
+          return;
+        }
+        if (auth === "Bearer admin-token") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ logs: [] }));
+          return;
+        }
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Forbidden" }));
+        return;
+      }
+
+      // Administrative route that rejects with the wrong status code
+      if (pathname === "/admin/legacy-metrics") {
+        const auth = req.headers["authorization"];
+        if (auth === "Bearer admin-token") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ metrics: [] }));
+          return;
+        }
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Unauthorized" }));
         return;
       }
 
@@ -339,22 +382,107 @@ describe("Test Engine & Probe Suite", () => {
       expect(result.severity).toBe("info");
     });
 
-    it("bola_unauthorized_object_access warns when arbitrary ID exposes object", async () => {
+    const authProfiles = {
+      primary: { name: "Tenant A", token: "token-a" },
+      secondary: { name: "Tenant B", token: "token-b" },
+    };
+
+    it("bola_unauthorized_object_access warns when target has no auth profiles configured", async () => {
       const result = await runBolaUnauthorizedAccessCheck(
-        { ...baseJob, baseUrl, path: "/users/{id}?vulnerable=true" },
+        { ...baseJob, baseUrl, path: "/tenant-objects/{id}" },
         probeClient
       );
       expect(result.status).toBe("warn");
-      expect(result.severity).toBe("high");
+      expect(result.detail.evidence).toContain("Skipped: this target has no Tenant A and Tenant B auth profiles");
     });
 
-    it("bola_unauthorized_object_access passes when arbitrary ID returns 404", async () => {
+    it("bola_unauthorized_object_access fails when secondary tenant accesses the primary tenant's resource", async () => {
       const result = await runBolaUnauthorizedAccessCheck(
-        { ...baseJob, baseUrl, path: "/users/{id}" },
+        { ...baseJob, baseUrl, path: "/tenant-objects/{id}?vulnerable=true", config: { authProfiles } },
+        probeClient
+      );
+      expect(result.status).toBe("fail");
+      expect(result.severity).toBe("critical");
+      expect(result.detail.evidence).toContain("was able to read a resource that belongs to");
+    });
+
+    it("bola_unauthorized_object_access passes when secondary tenant is rejected with 403", async () => {
+      const result = await runBolaUnauthorizedAccessCheck(
+        { ...baseJob, baseUrl, path: "/tenant-objects/{id}", config: { authProfiles } },
         probeClient
       );
       expect(result.status).toBe("pass");
       expect(result.severity).toBe("info");
+    });
+
+    it("bola_unauthorized_object_access warns when the primary baseline request fails", async () => {
+      const result = await runBolaUnauthorizedAccessCheck(
+        {
+          ...baseJob,
+          baseUrl,
+          path: "/tenant-objects/{id}",
+          config: {
+            authProfiles: {
+              primary: { name: "Tenant A", token: "wrong-token" },
+              secondary: authProfiles.secondary,
+            },
+          },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("warn");
+      expect(result.detail.evidence).toContain("Couldn't get a baseline");
+    });
+
+    it("bfla_privilege_escalation warns when target has no caller profile configured", async () => {
+      const result = await runBflaPrivilegeEscalationCheck(
+        { ...baseJob, baseUrl, path: "/admin/audit-search" },
+        probeClient
+      );
+      expect(result.status).toBe("warn");
+      expect(result.detail.evidence).toContain("Skipped: this target has no Unprivileged or Tenant B auth profile");
+    });
+
+    it("bfla_privilege_escalation fails when an unprivileged token reaches the admin route", async () => {
+      const result = await runBflaPrivilegeEscalationCheck(
+        {
+          ...baseJob,
+          baseUrl,
+          path: "/admin/audit-search?vulnerable=true",
+          config: { authProfiles: { unprivileged: { name: "Regular User", token: "user-token" } } },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("fail");
+      expect(result.severity).toBe("critical");
+    });
+
+    it("bfla_privilege_escalation passes when the admin route rejects with 403", async () => {
+      const result = await runBflaPrivilegeEscalationCheck(
+        {
+          ...baseJob,
+          baseUrl,
+          path: "/admin/audit-search",
+          config: { authProfiles: { unprivileged: { name: "Regular User", token: "user-token" } } },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("pass");
+      expect(result.severity).toBe("info");
+    });
+
+    it("bfla_privilege_escalation warns when the admin route rejects with the wrong status code", async () => {
+      const result = await runBflaPrivilegeEscalationCheck(
+        {
+          ...baseJob,
+          baseUrl,
+          path: "/admin/legacy-metrics",
+          config: { authProfiles: { unprivileged: { name: "Regular User", token: "user-token" } } },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("warn");
+      expect(result.detail.evidence).toContain("instead of the HTTP 403 you'd expect");
     });
 
     it("mass_assignment_probe detects vulnerability when admin attributes are echoed", async () => {

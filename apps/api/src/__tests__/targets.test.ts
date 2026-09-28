@@ -252,4 +252,103 @@ describe("Target Management & Ingestion API (/api/targets)", () => {
     });
     expect(getAfterDeleteRes.statusCode).toBe(404);
   });
+  describe("Auth profiles (/api/targets/:id/auth-profiles)", () => {
+    const createTarget = async (): Promise<string> => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/targets",
+        payload: {
+          name: "Auth Profile Target",
+          baseUrl: "https://api.example.com",
+          specSource: SAMPLE_YAML_SPEC,
+        },
+      });
+      const { targetId } = res.json();
+      createdTargetIds.push(targetId);
+      return targetId;
+    };
+
+    it("should store Tenant A and Tenant B profiles and never echo tokens back", async () => {
+      const targetId = await createTarget();
+
+      const putRes = await app.inject({
+        method: "PUT",
+        url: `/api/targets/${targetId}/auth-profiles`,
+        payload: {
+          primary: { name: " Tenant A ", token: "secret-token-a" },
+          secondary: { name: "Tenant B", token: "secret-token-b" },
+        },
+      });
+
+      expect(putRes.statusCode).toBe(200);
+      expect(putRes.json()).toEqual({
+        primary: { name: "Tenant A", hasToken: true },
+        secondary: { name: "Tenant B", hasToken: true },
+      });
+      expect(putRes.body).not.toContain("secret-token");
+
+      const getRes = await app.inject({ method: "GET", url: `/api/targets/${targetId}` });
+      expect(getRes.json().authProfiles.primary).toEqual({ name: "Tenant A", hasToken: true });
+      expect(getRes.body).not.toContain("secret-token");
+
+      const listRes = await app.inject({ method: "GET", url: "/api/targets" });
+      const listed = listRes.json().find((t: { id: string }) => t.id === targetId);
+      expect(listed.hasAuthProfiles).toBe(true);
+    });
+
+    it("should accept auth profiles at creation time", async () => {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/targets",
+        payload: {
+          name: "Preconfigured Target",
+          baseUrl: "https://api.example.com",
+          specSource: SAMPLE_YAML_SPEC,
+          authProfiles: { primary: { name: "Tenant A", token: "tok-a" } },
+        },
+      });
+      expect(res.statusCode).toBe(201);
+      const { targetId } = res.json();
+      createdTargetIds.push(targetId);
+
+      const getRes = await app.inject({ method: "GET", url: `/api/targets/${targetId}` });
+      expect(getRes.json().authProfiles.primary).toEqual({ name: "Tenant A", hasToken: true });
+    });
+
+    it("should report no auth profiles for targets that never configured any", async () => {
+      const targetId = await createTarget();
+      const getRes = await app.inject({ method: "GET", url: `/api/targets/${targetId}` });
+      expect(getRes.json().authProfiles).toEqual({});
+    });
+
+    it("should reject profiles with a blank token", async () => {
+      const targetId = await createTarget();
+      const res = await app.inject({
+        method: "PUT",
+        url: `/api/targets/${targetId}/auth-profiles`,
+        payload: { primary: { name: "Tenant A", token: "   " } },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("should ignore unknown profile slots instead of persisting them", async () => {
+      const targetId = await createTarget();
+      const res = await app.inject({
+        method: "PUT",
+        url: `/api/targets/${targetId}/auth-profiles`,
+        payload: { tertiary: { name: "X", token: "y" } },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({});
+    });
+
+    it("should return 404 for an unknown target", async () => {
+      const res = await app.inject({
+        method: "PUT",
+        url: "/api/targets/00000000-0000-0000-0000-000000000000/auth-profiles",
+        payload: { primary: { name: "Tenant A", token: "tok" } },
+      });
+      expect(res.statusCode).toBe(404);
+    });
+  });
 });

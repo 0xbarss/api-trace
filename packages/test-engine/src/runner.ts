@@ -25,7 +25,13 @@ export const registeredRunners: RegisteredRunner[] = [
   {
     name: "bola_unauthorized_object_access",
     category: "security",
-    description: "Probe for broken object level authorization on resource ID path parameters",
+    description: "Check that one tenant can't read another tenant's resource by replaying the request with the second tenant's token",
+    run: (job, opts) => executeTestJob(job, opts),
+  },
+  {
+    name: "bfla_privilege_escalation",
+    category: "security",
+    description: "Check that admin, audit, and system routes turn away regular users",
     run: (job, opts) => executeTestJob(job, opts),
   },
   {

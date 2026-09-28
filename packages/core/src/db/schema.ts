@@ -17,6 +17,18 @@ export interface EndpointParameter {
   schema?: Record<string, unknown>;
 }
 
+export interface TargetAuthProfile {
+  name: string;
+  token: string;
+  headers?: Record<string, string>;
+}
+
+export interface TargetAuthProfiles {
+  primary?: TargetAuthProfile;
+  secondary?: TargetAuthProfile;
+  unprivileged?: TargetAuthProfile;
+}
+
 export interface TestResultDetail {
   evidence: string;
   requestSent?: {
@@ -38,6 +50,7 @@ export const targets = pgTable("targets", {
   name: varchar("name", { length: 255 }).notNull(),
   baseUrl: varchar("base_url", { length: 1024 }).notNull(),
   specSource: text("spec_source").notNull(),
+  authProfiles: jsonb("auth_profiles").$type<TargetAuthProfiles | null>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

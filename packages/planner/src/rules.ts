@@ -1,4 +1,11 @@
-import type { MatrixRule, PlannerEndpointInput } from "./types.js";
+import type { MatrixRule, PlannerEndpointInput, TestPlanOptions } from "./types.js";
+
+function buildAuthProfileConfig(options?: TestPlanOptions): Record<string, unknown> | undefined {
+  if (!options?.authProfiles) {
+    return options?.config ? { ...options.config } : undefined;
+  }
+  return { ...(options.config ?? {}), authProfiles: options.authProfiles };
+}
 
 export function isAuthRequired(endpoint: PlannerEndpointInput): boolean {
   if (!endpoint.authType) {
@@ -23,6 +30,10 @@ export function hasIdInPath(endpoint: PlannerEndpointInput): boolean {
     const clean = token.replace(/[{}]/g, "").toLowerCase();
     return clean.includes("id") || clean.endsWith("_id");
   });
+}
+
+export function isAdminRoute(endpoint: PlannerEndpointInput): boolean {
+  return /\/(admin|audit|system)(\/|$)/i.test(endpoint.path);
 }
 
 export function isMutatingWithBody(endpoint: PlannerEndpointInput): boolean {
@@ -54,8 +65,16 @@ export const matrixRules: MatrixRule[] = [
   {
     name: "bola_unauthorized_object_access",
     category: "security",
-    description: "Probe for broken object level authorization on resource ID path parameters",
+    description: "Check that one tenant can't read another tenant's resource by replaying the request with the second tenant's token",
     matches: (endpoint) => isAuthRequired(endpoint) && hasIdInPath(endpoint),
+    buildConfig: (_endpoint, options) => buildAuthProfileConfig(options),
+  },
+  {
+    name: "bfla_privilege_escalation",
+    category: "security",
+    description: "Check that admin, audit, and system routes turn away regular users",
+    matches: (endpoint) => isAuthRequired(endpoint) && isAdminRoute(endpoint),
+    buildConfig: (_endpoint, options) => buildAuthProfileConfig(options),
   },
   {
     name: "mass_assignment_probe",

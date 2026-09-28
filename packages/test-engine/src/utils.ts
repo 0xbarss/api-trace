@@ -1,4 +1,4 @@
-import type { EndpointParameter } from "@apitrace/core";
+import type { EndpointParameter, TargetAuthProfile } from "@apitrace/core";
 
 export function interpolatePath(
   path: string,
@@ -64,6 +64,13 @@ export function buildSampleBody(
   }
 
   return Object.keys(body).length > 0 ? body : { test: "value" };
+}
+
+export function buildAuthHeaders(profile: TargetAuthProfile): Record<string, string> {
+  return {
+    authorization: `Bearer ${profile.token}`,
+    ...profile.headers,
+  };
 }
 
 export function truncate(text: string, maxLength = 500): string {

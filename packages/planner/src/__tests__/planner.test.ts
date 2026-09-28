@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
+import type { TargetAuthProfiles } from "@apitrace/core";
 import {
   generateEndpointJobs,
   generateTestPlan,
   isAuthRequired,
   hasIdInPath,
   isMutatingWithBody,
+  isAdminRoute,
   hasQueryParamsOrBody,
   matrixRules,
   type PlannerEndpointInput,
@@ -60,6 +62,13 @@ describe("Test Plan Generator & Matrix Rules", () => {
           parameters: [{ name: "slug", in: "path", required: true }],
         })
       ).toBe(false);
+    });
+
+    it("isAdminRoute detects administrative, audit, and system route segments", () => {
+      expect(isAdminRoute({ id: "1", method: "GET", path: "/api/v1/admin/users" })).toBe(true);
+      expect(isAdminRoute({ id: "1", method: "GET", path: "/api/v1/audit/search" })).toBe(true);
+      expect(isAdminRoute({ id: "1", method: "GET", path: "/api/v1/system/metrics" })).toBe(true);
+      expect(isAdminRoute({ id: "1", method: "GET", path: "/api/v1/accounts/{id}" })).toBe(false);
     });
 
     it("isMutatingWithBody matches POST, PUT, PATCH with requestSchema", () => {
@@ -145,6 +154,51 @@ describe("Test Plan Generator & Matrix Rules", () => {
       expect(testNames).toContain("cors_wildcard_check");
       expect(testNames).toContain("rate_limit_burst_presence");
       expect(testNames).toContain("latency_baseline_distribution");
+    });
+
+    it("generates a BFLA test for authenticated administrative routes only", () => {
+      const adminEndpoint: PlannerEndpointInput = {
+        id: "ep-admin-1",
+        method: "GET",
+        path: "/api/v1/audit/search",
+        authType: "bearer",
+      };
+      const regularEndpoint: PlannerEndpointInput = {
+        id: "ep-regular-1",
+        method: "GET",
+        path: "/api/v1/accounts/{id}",
+        authType: "bearer",
+        parameters: [{ name: "id", in: "path", required: true }],
+      };
+
+      const adminJobs = generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, adminEndpoint);
+      const regularJobs = generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, regularEndpoint);
+
+      expect(adminJobs.map((j) => j.testName)).toContain("bfla_privilege_escalation");
+      expect(regularJobs.map((j) => j.testName)).not.toContain("bfla_privilege_escalation");
+    });
+
+    it("carries target auth profiles into BOLA and BFLA job config", () => {
+      const authProfiles: TargetAuthProfiles = {
+        primary: { name: "Tenant A", token: "token-a" },
+        secondary: { name: "Tenant B", token: "token-b" },
+      };
+      const endpoint: PlannerEndpointInput = {
+        id: "ep-bola-1",
+        method: "GET",
+        path: "/api/v1/admin/audit",
+        authType: "bearer",
+        parameters: [{ name: "id", in: "path", required: true }],
+      };
+
+      const jobs = generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, endpoint, {
+        authProfiles,
+      });
+
+      const bolaJob = jobs.find((j) => j.testName === "bola_unauthorized_object_access");
+      const bflaJob = jobs.find((j) => j.testName === "bfla_privilege_escalation");
+      expect(bolaJob?.config?.authProfiles).toEqual(authProfiles);
+      expect(bflaJob?.config?.authProfiles).toEqual(authProfiles);
     });
 
     it("generates mass assignment and injection probes for mutating endpoint with request schema", () => {

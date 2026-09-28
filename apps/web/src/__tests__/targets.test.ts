@@ -126,4 +126,32 @@ describe("Target Catalog & API Client", () => {
     expect(deleteRes.success).toBe(true);
     expect(deleteRes.id).toBe("target-456");
   });
+
+  it("saves auth profiles with PUT and returns the token-free summary", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ primary: { name: "Tenant A", hasToken: true } }),
+    } as Response);
+
+    const summary = await apiClient.updateAuthProfiles("target-1", {
+      primary: { name: "Tenant A", token: "secret" },
+    });
+
+    expect(summary.primary).toEqual({ name: "Tenant A", hasToken: true });
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/api/targets/target-1/auth-profiles");
+    expect(init?.method).toBe("PUT");
+  });
+
+  it("surfaces the server message when saving auth profiles fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ message: "Every auth profile needs a name and a token" }),
+    } as Response);
+
+    await expect(
+      apiClient.updateAuthProfiles("target-1", { primary: { name: "", token: "" } })
+    ).rejects.toThrow("needs a name and a token");
+  });
 });

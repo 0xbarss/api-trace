@@ -27,6 +27,7 @@ export interface TargetSummary {
   createdAt: string;
   updatedAt: string;
   endpointsCount: number;
+  hasAuthProfiles?: boolean;
   riskScore?: number;
 }
 
@@ -38,7 +39,24 @@ export interface TargetDetail {
   createdAt: string;
   updatedAt: string;
   endpoints: EndpointSummary[];
+  authProfiles?: AuthProfilesSummary;
 }
+
+export type AuthProfileSlot = "primary" | "secondary" | "unprivileged";
+
+export interface AuthProfileInput {
+  name: string;
+  token: string;
+}
+
+export type AuthProfilesInput = Partial<Record<AuthProfileSlot, AuthProfileInput>>;
+
+export interface AuthProfileSummary {
+  name: string;
+  hasToken: boolean;
+}
+
+export type AuthProfilesSummary = Partial<Record<AuthProfileSlot, AuthProfileSummary>>;
 
 export interface CreateTargetInput {
   name: string;

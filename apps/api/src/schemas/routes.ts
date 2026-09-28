@@ -1,3 +1,41 @@
+const authProfileSchema = {
+  type: "object",
+  required: ["name", "token"],
+  properties: {
+    name: { type: "string", minLength: 1, maxLength: 255 },
+    token: { type: "string", minLength: 1 },
+    headers: { type: "object", additionalProperties: { type: "string" } },
+  },
+  additionalProperties: false,
+};
+
+const authProfilesSchema = {
+  type: "object",
+  properties: {
+    primary: authProfileSchema,
+    secondary: authProfileSchema,
+    unprivileged: authProfileSchema,
+  },
+  additionalProperties: false,
+};
+
+const authProfileSummarySchema = {
+  type: "object",
+  properties: {
+    name: { type: "string" },
+    hasToken: { type: "boolean" },
+  },
+};
+
+const authProfilesSummarySchema = {
+  type: "object",
+  properties: {
+    primary: authProfileSummarySchema,
+    secondary: authProfileSummarySchema,
+    unprivileged: authProfileSummarySchema,
+  },
+};
+
 export const createTargetSchema = {
   body: {
     type: "object",
@@ -6,6 +44,7 @@ export const createTargetSchema = {
       name: { type: "string", minLength: 1, maxLength: 255 },
       baseUrl: { type: "string", minLength: 1, maxLength: 1024 },
       specSource: { type: "string", minLength: 1 },
+      authProfiles: authProfilesSchema,
     },
     additionalProperties: false,
   },
@@ -18,6 +57,21 @@ export const createTargetSchema = {
         discoveredEndpointsCount: { type: "integer" },
       },
     },
+  },
+};
+
+export const updateAuthProfilesSchema = {
+  params: {
+    type: "object",
+    required: ["id"],
+    properties: {
+      id: { type: "string", format: "uuid" },
+    },
+    additionalProperties: false,
+  },
+  body: authProfilesSchema,
+  response: {
+    200: authProfilesSummarySchema,
   },
 };
 
@@ -38,7 +92,16 @@ export const listTargetsSchema = {
       type: "array",
       items: {
         type: "object",
-        required: ["id", "name", "baseUrl", "specSource", "createdAt", "updatedAt", "endpointsCount"],
+        required: [
+          "id",
+          "name",
+          "baseUrl",
+          "specSource",
+          "createdAt",
+          "updatedAt",
+          "endpointsCount",
+          "hasAuthProfiles",
+        ],
         properties: {
           id: { type: "string" },
           name: { type: "string" },
@@ -47,6 +110,7 @@ export const listTargetsSchema = {
           createdAt: { type: "string" },
           updatedAt: { type: "string" },
           endpointsCount: { type: "integer" },
+          hasAuthProfiles: { type: "boolean" },
         },
       },
     },
@@ -65,7 +129,16 @@ export const getTargetSchema = {
   response: {
     200: {
       type: "object",
-      required: ["id", "name", "baseUrl", "specSource", "createdAt", "updatedAt", "endpoints"],
+      required: [
+        "id",
+        "name",
+        "baseUrl",
+        "specSource",
+        "createdAt",
+        "updatedAt",
+        "endpoints",
+        "authProfiles",
+      ],
       properties: {
         id: { type: "string" },
         name: { type: "string" },
@@ -73,6 +146,7 @@ export const getTargetSchema = {
         specSource: { type: "string" },
         createdAt: { type: "string" },
         updatedAt: { type: "string" },
+        authProfiles: authProfilesSummarySchema,
         endpoints: {
           type: "array",
           items: {

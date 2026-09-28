@@ -1,4 +1,4 @@
-import type { EndpointParameter } from "@apitrace/core";
+import type { EndpointParameter, TargetAuthProfiles } from "@apitrace/core";
 
 export type TestCategory = "security" | "performance" | "contract";
 
@@ -35,6 +35,7 @@ export interface TestPlanOptions {
   enabledTests?: string[];
   disabledTests?: string[];
   config?: Record<string, unknown>;
+  authProfiles?: TargetAuthProfiles;
 }
 
 export interface GeneratePlanParams {

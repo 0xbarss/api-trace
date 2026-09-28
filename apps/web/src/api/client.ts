@@ -4,6 +4,8 @@ import type {
   CreateTargetInput,
   CreateTargetResponse,
   DeleteTargetResponse,
+  AuthProfilesInput,
+  AuthProfilesSummary,
   CreateRunInput,
   CreateRunResponse,
   RunSummary,
@@ -78,6 +80,21 @@ class ApiClient {
     }
 
     return (await res.json()) as CreateTargetResponse;
+  }
+
+  async updateAuthProfiles(id: string, profiles: AuthProfilesInput): Promise<AuthProfilesSummary> {
+    const res = await fetch(`${this.baseUrl}/api/targets/${encodeURIComponent(id)}/auth-profiles`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profiles),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
+      throw new Error(err.message || `Could not save auth profiles (HTTP ${res.status})`);
+    }
+
+    return (await res.json()) as AuthProfilesSummary;
   }
 
   async deleteTarget(id: string): Promise<DeleteTargetResponse> {

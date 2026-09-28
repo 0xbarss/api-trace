@@ -48,7 +48,7 @@ export class RunService {
       targetId: target.id,
       baseUrl: target.baseUrl,
       endpoints: targetEndpoints,
-      options: body,
+      options: { ...body, authProfiles: target.authProfiles ?? undefined },
     });
 
     if (jobs.length > 0) {

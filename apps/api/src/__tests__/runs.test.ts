@@ -187,6 +187,79 @@ describe("Test Run Trigger & Query Routes (/api/targets/:id/runs & /api/runs)", 
     expect(popped!.data.category).toBe("performance");
   });
 
+  it("should pass stored target auth profiles into BOLA and BFLA jobs", async () => {
+    const securedSpec = `
+openapi: 3.0.0
+info:
+  title: Secured Target
+  version: 1.0.0
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+security:
+  - bearerAuth: []
+paths:
+  /accounts/{id}:
+    get:
+      summary: Get account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+  /admin/audit:
+    get:
+      summary: Audit log
+      responses:
+        '200':
+          description: OK
+`;
+    const createTargetRes = await app.inject({
+      method: "POST",
+      url: "/api/targets",
+      payload: {
+        name: "Multi Persona Target",
+        baseUrl: "https://persona.example.com",
+        specSource: securedSpec,
+        authProfiles: {
+          primary: { name: "Tenant A", token: "tok-a" },
+          secondary: { name: "Tenant B", token: "tok-b" },
+        },
+      },
+    });
+    expect(createTargetRes.statusCode).toBe(201);
+    const { targetId } = createTargetRes.json();
+    createdTargetIds.push(targetId);
+
+    await testQueue.clear();
+
+    const triggerRes = await app.inject({
+      method: "POST",
+      url: `/api/targets/${targetId}/runs`,
+      payload: { categories: ["security"] },
+    });
+    expect(triggerRes.statusCode).toBe(201);
+
+    const jobs: TestJobPayload[] = [];
+    for (let job = await testQueue.popNow(); job; job = await testQueue.popNow()) {
+      jobs.push(job.data);
+    }
+
+    const bolaJob = jobs.find((j) => j.testName === "bola_unauthorized_object_access");
+    const bflaJob = jobs.find((j) => j.testName === "bfla_privilege_escalation");
+    expect(bolaJob?.config?.authProfiles).toEqual({
+      primary: { name: "Tenant A", token: "tok-a" },
+      secondary: { name: "Tenant B", token: "tok-b" },
+    });
+    expect(bflaJob?.config?.authProfiles).toBeDefined();
+  });
+
   it("should return 400 when GET /api/runs/:id has invalid uuid", async () => {
     const response = await app.inject({
       method: "GET",

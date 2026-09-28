@@ -7,11 +7,13 @@ import {
   listTargetsSchema,
   deleteTargetSchema,
   createRunSchema,
+  updateAuthProfilesSchema,
 } from "../schemas/routes.js";
 import type {
   CreateTargetBody,
   CreateRunBody,
   TargetParams,
+  UpdateAuthProfilesBody,
 } from "../types.js";
 
 export const targetsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -42,6 +44,15 @@ export const targetsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const result = await targetService.createTarget(request.body);
       return reply.status(201).send(result);
+    }
+  );
+
+  fastify.put<{ Params: TargetParams; Body: UpdateAuthProfilesBody }>(
+    "/:id/auth-profiles",
+    { schema: updateAuthProfilesSchema },
+    async (request, reply) => {
+      const result = await targetService.updateAuthProfiles(request.params.id, request.body);
+      return reply.status(200).send(result);
     }
   );
 

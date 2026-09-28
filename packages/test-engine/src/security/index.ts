@@ -1,8 +1,11 @@
 import type { TestJobPayload } from "@apitrace/planner";
+import type { TargetAuthProfiles } from "@apitrace/core";
 import type { TestExecutionResult } from "../types.js";
 import type { HttpProbeClient } from "../http/client.js";
-import { interpolatePath, truncate, buildSampleBody } from "../utils.js";
+import { interpolatePath, truncate, buildSampleBody, buildAuthHeaders } from "../utils.js";
 import { runPolyglotFuzzProbe } from "../fuzzing/index.js";
+
+const CROSS_TENANT_RESOURCE_ID = "500001";
 
 const KNOWN_STACK_PATTERNS = [
   /at\s+[\w\d_.]+\s+\(.*:\d+:\d+\)/i,
@@ -138,34 +141,169 @@ export async function runBolaUnauthorizedAccessCheck(
   job: TestJobPayload,
   client: HttpProbeClient
 ): Promise<TestExecutionResult> {
+  const authProfiles = job.config?.authProfiles as TargetAuthProfiles | undefined;
+  const primary = authProfiles?.primary;
+  const secondary = authProfiles?.secondary;
+
+  if (!primary || !secondary) {
+    return {
+      status: "warn",
+      severity: "medium",
+      latencyMs: 0,
+      detail: {
+        evidence: "Skipped: this target has no Tenant A and Tenant B auth profiles, so there was no way to check whether one tenant can read another tenant's data.",
+        remediation: "Add a token for each tenant under Auth profiles for this target, then run the tests again.",
+      },
+    };
+  }
+
   const path = interpolatePath(job.path, job.parameters, {
-    id: "99999999",
-    user_id: "99999999",
-    userId: "99999999",
+    id: CROSS_TENANT_RESOURCE_ID,
+    user_id: CROSS_TENANT_RESOURCE_ID,
+    userId: CROSS_TENANT_RESOURCE_ID,
   });
+  const targetUrl = client.buildUrl(job.baseUrl, path);
+
+  const primaryRes = await client.send(job.baseUrl, {
+    method: job.method,
+    path,
+    headers: buildAuthHeaders(primary),
+  });
+
+  if (primaryRes.statusCode < 200 || primaryRes.statusCode >= 300) {
+    return {
+      status: "warn",
+      severity: "low",
+      latencyMs: primaryRes.latencyMs,
+      detail: {
+        evidence: `Couldn't get a baseline: ${primary.name} received HTTP ${primaryRes.statusCode} for this ID, so there was nothing to compare the other tenant against.`,
+        requestSent: {
+          method: job.method,
+          url: targetUrl,
+          headers: { authorization: "Bearer [redacted]" },
+        },
+        responseReceived: {
+          status: primaryRes.statusCode,
+          headers: primaryRes.headers,
+        },
+        remediation: "Use a resource ID that the first tenant really owns, so the comparison means something.",
+      },
+    };
+  }
+
+  const secondaryRes = await client.send(job.baseUrl, {
+    method: job.method,
+    path,
+    headers: buildAuthHeaders(secondary),
+  });
+
+  if (secondaryRes.statusCode >= 200 && secondaryRes.statusCode < 300) {
+    return {
+      status: "fail",
+      severity: "critical",
+      latencyMs: secondaryRes.latencyMs,
+      detail: {
+        evidence: `${secondary.name} was able to read a resource that belongs to ${primary.name} and got HTTP ${secondaryRes.statusCode}.`,
+        requestSent: {
+          method: job.method,
+          url: targetUrl,
+          headers: { authorization: "Bearer [redacted]" },
+        },
+        responseReceived: {
+          status: secondaryRes.statusCode,
+          headers: secondaryRes.headers,
+          body: truncate(secondaryRes.body),
+        },
+        remediation: "Check that the caller owns a resource before returning it, and scope every lookup to the caller's tenant.",
+      },
+    };
+  }
+
+  return {
+    status: "pass",
+    severity: "info",
+    latencyMs: secondaryRes.latencyMs,
+    detail: {
+      evidence: `${secondary.name} asked for a resource that belongs to ${primary.name} and was correctly turned away with HTTP ${secondaryRes.statusCode}.`,
+      requestSent: {
+        method: job.method,
+        url: targetUrl,
+        headers: { authorization: "Bearer [redacted]" },
+      },
+      responseReceived: {
+        status: secondaryRes.statusCode,
+        headers: secondaryRes.headers,
+      },
+    },
+  };
+}
+
+export async function runBflaPrivilegeEscalationCheck(
+  job: TestJobPayload,
+  client: HttpProbeClient
+): Promise<TestExecutionResult> {
+  const authProfiles = job.config?.authProfiles as TargetAuthProfiles | undefined;
+  const caller = authProfiles?.unprivileged ?? authProfiles?.secondary;
+
+  if (!caller) {
+    return {
+      status: "warn",
+      severity: "medium",
+      latencyMs: 0,
+      detail: {
+        evidence: "Skipped: this target has no Unprivileged or Tenant B auth profile, so there was no regular user to try this admin route with.",
+        remediation: "Add a regular user's token under Auth profiles for this target, then run the tests again.",
+      },
+    };
+  }
+
+  const path = interpolatePath(job.path, job.parameters);
   const targetUrl = client.buildUrl(job.baseUrl, path);
   const res = await client.send(job.baseUrl, {
     method: job.method,
     path,
+    headers: buildAuthHeaders(caller),
   });
 
   if (res.statusCode >= 200 && res.statusCode < 300) {
     return {
-      status: "warn",
-      severity: "high",
+      status: "fail",
+      severity: "critical",
       latencyMs: res.latencyMs,
       detail: {
-        evidence: `Endpoint returned HTTP ${res.statusCode} for arbitrary resource identifier without caller ownership verification.`,
+        evidence: `This admin route let in ${caller.name}, who isn't an admin, and returned HTTP ${res.statusCode}.`,
         requestSent: {
           method: job.method,
           url: targetUrl,
+          headers: { authorization: "Bearer [redacted]" },
         },
         responseReceived: {
           status: res.statusCode,
           headers: res.headers,
           body: truncate(res.body),
         },
-        remediation: "Verify caller ownership and tenant isolation constraints on resource ID.",
+        remediation: "Check the caller's role or scope on admin routes. Being logged in shouldn't be enough.",
+      },
+    };
+  }
+
+  if (res.statusCode !== 403) {
+    return {
+      status: "warn",
+      severity: "low",
+      latencyMs: res.latencyMs,
+      detail: {
+        evidence: `This admin route turned ${caller.name} away, but with HTTP ${res.statusCode} instead of the HTTP 403 you'd expect.`,
+        requestSent: {
+          method: job.method,
+          url: targetUrl,
+          headers: { authorization: "Bearer [redacted]" },
+        },
+        responseReceived: {
+          status: res.statusCode,
+          headers: res.headers,
+        },
+        remediation: "Return 403 Forbidden when a signed-in caller doesn't have the right role or scope.",
       },
     };
   }
@@ -175,10 +313,11 @@ export async function runBolaUnauthorizedAccessCheck(
     severity: "info",
     latencyMs: res.latencyMs,
     detail: {
-      evidence: `Endpoint did not expose unauthorized object; returned HTTP ${res.statusCode}.`,
+      evidence: `This admin route correctly turned ${caller.name} away with HTTP 403.`,
       requestSent: {
         method: job.method,
         url: targetUrl,
+        headers: { authorization: "Bearer [redacted]" },
       },
       responseReceived: {
         status: res.statusCode,
@@ -549,6 +688,8 @@ export async function runSecurityProbe(
       return runAuthMalformedCheck(job, client);
     case "bola_unauthorized_object_access":
       return runBolaUnauthorizedAccessCheck(job, client);
+    case "bfla_privilege_escalation":
+      return runBflaPrivilegeEscalationCheck(job, client);
     case "mass_assignment_probe":
       return runMassAssignmentProbe(job, client);
     case "cors_wildcard_check":

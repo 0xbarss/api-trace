@@ -15,8 +15,10 @@ import {
   Layers,
   CheckCircle,
   AlertTriangle,
+  ShieldCheck,
 } from "lucide-react";
-import type { TargetSummary, TargetDetail, EndpointSummary } from "../types.js";
+import type { TargetSummary, TargetDetail, EndpointSummary, AuthProfilesInput } from "../types.js";
+import { AuthProfilesModal } from "./AuthProfilesModal.js";
 import { Dialog } from "./Dialog.js";
 
 interface TargetCatalogProps {
@@ -26,6 +28,7 @@ interface TargetCatalogProps {
   onDeleteTarget: (id: string) => Promise<void>;
   onTriggerRun: (targetId: string) => Promise<void>;
   onSelectTarget: (id: string) => Promise<TargetDetail>;
+  onUpdateAuthProfiles: (id: string, profiles: AuthProfilesInput) => Promise<void>;
 }
 
 export function TargetCatalog({
@@ -35,9 +38,11 @@ export function TargetCatalog({
   onDeleteTarget,
   onTriggerRun,
   onSelectTarget,
+  onUpdateAuthProfiles,
 }: TargetCatalogProps): React.ReactElement {
   const [searchTerm, setSearchTerm] = useState("");
   const [inspectingTarget, setInspectingTarget] = useState<TargetDetail | null>(null);
+  const [authTarget, setAuthTarget] = useState<TargetDetail | null>(null);
   const [endpointSearch, setEndpointSearch] = useState("");
   const [selectedMethod, setSelectedMethod] = useState<string>("ALL");
   const [runningTargetId, setRunningTargetId] = useState<string | null>(null);
@@ -75,6 +80,19 @@ export function TargetCatalog({
     } catch (err) {
       console.error("Failed to inspect target:", err);
     }
+  };
+
+  const handleOpenAuthProfiles = async (targetId: string) => {
+    try {
+      setAuthTarget(await onSelectTarget(targetId));
+    } catch (err) {
+      console.error("Failed to load auth profiles:", err);
+    }
+  };
+
+  const handleSaveAuthProfiles = async (profiles: AuthProfilesInput) => {
+    if (!authTarget) return;
+    await onUpdateAuthProfiles(authTarget.id, profiles);
   };
 
   const handleRun = async (targetId: string, name: string) => {
@@ -313,6 +331,17 @@ export function TargetCatalog({
 
                   <button
                     type="button"
+                    onClick={() => handleOpenAuthProfiles(target.id)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-zinc-700 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 transition-colors"
+                  >
+                    <ShieldCheck
+                      className={`w-3 h-3 ${target.hasAuthProfiles ? "text-emerald-600" : "text-zinc-500"}`}
+                    />
+                    <span>{target.hasAuthProfiles ? "Auth profiles" : "Set up auth"}</span>
+                  </button>
+
+                  <button
+                    type="button"
                     disabled={runningTargetId === target.id}
                     onClick={() => handleRun(target.id, target.name)}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50"
@@ -337,6 +366,14 @@ export function TargetCatalog({
         </div>
       )}
       </div>
+
+      <AuthProfilesModal
+        isOpen={authTarget !== null}
+        targetName={authTarget?.name ?? ""}
+        saved={authTarget?.authProfiles ?? {}}
+        onClose={() => setAuthTarget(null)}
+        onSubmit={handleSaveAuthProfiles}
+      />
 
       {/* Discovered Endpoints Inspection Drawer / Modal */}
       {inspectingTarget && typeof document !== "undefined" &&
