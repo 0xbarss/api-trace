@@ -156,8 +156,14 @@ describe("Test Plan Generator & Matrix Rules", () => {
       expect(testNames).toContain("latency_baseline_distribution");
     });
 
-    it("generates a BFLA test for authenticated administrative routes only", () => {
-      const adminEndpoint: PlannerEndpointInput = {
+    it("generates a BFLA test for admin route paths regardless of their authType", () => {
+      const authFreeAdminEndpoint: PlannerEndpointInput = {
+        id: "ep-admin-auth-free",
+        method: "GET",
+        path: "/api/v1/audit/search",
+        authType: "none",
+      };
+      const authRequiredAdminEndpoint: PlannerEndpointInput = {
         id: "ep-admin-1",
         method: "GET",
         path: "/api/v1/audit/search",
@@ -171,12 +177,66 @@ describe("Test Plan Generator & Matrix Rules", () => {
         parameters: [{ name: "id", in: "path", required: true }],
       };
 
-      const adminJobs = generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, adminEndpoint);
+      const authFreeJobs = generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, authFreeAdminEndpoint);
+      const authRequiredJobs = generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, authRequiredAdminEndpoint);
       const regularJobs = generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, regularEndpoint);
 
-      expect(adminJobs.map((j) => j.testName)).toContain("bfla_privilege_escalation");
+      expect(authFreeJobs.map((j) => j.testName)).toContain("bfla_privilege_escalation");
+      expect(authRequiredJobs.map((j) => j.testName)).toContain("bfla_privilege_escalation");
       expect(regularJobs.map((j) => j.testName)).not.toContain("bfla_privilege_escalation");
     });
+
+    it("generates business_logic_state_injection for mutating endpoints with a request schema", () => {
+      const endpoint: PlannerEndpointInput = {
+        id: "ep-transfers",
+        method: "POST",
+        path: "/api/v1/transfers",
+        authType: "bearer",
+        requestSchema: { type: "object", properties: { amount: { type: "number" } } },
+      };
+
+      const jobs = generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, endpoint);
+      expect(jobs.map((j) => j.testName)).toContain("business_logic_state_injection");
+    });
+
+    it("generates sensitive_data_exposure for authenticated GET endpoints with a response schema", () => {
+      const authenticatedGetWithSchema: PlannerEndpointInput = {
+        id: "ep-cards",
+        method: "GET",
+        path: "/api/v1/cards",
+        authType: "bearer",
+        responseSchema: { type: "array", items: { type: "object" } },
+      };
+      const unauthenticated: PlannerEndpointInput = {
+        id: "ep-public",
+        method: "GET",
+        path: "/api/v1/public",
+        authType: "none",
+        responseSchema: { type: "object" },
+      };
+      const noSchema: PlannerEndpointInput = {
+        id: "ep-no-schema",
+        method: "GET",
+        path: "/api/v1/accounts",
+        authType: "bearer",
+      };
+
+      expect(
+        generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, authenticatedGetWithSchema)
+          .map((j) => j.testName)
+      ).toContain("sensitive_data_exposure");
+
+      expect(
+        generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, unauthenticated)
+          .map((j) => j.testName)
+      ).not.toContain("sensitive_data_exposure");
+
+      expect(
+        generateEndpointJobs(defaultRunId, defaultTargetId, defaultBaseUrl, noSchema)
+          .map((j) => j.testName)
+      ).not.toContain("sensitive_data_exposure");
+    });
+
 
     it("carries target auth profiles into BOLA and BFLA job config", () => {
       const authProfiles: TargetAuthProfiles = {

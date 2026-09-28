@@ -20,6 +20,8 @@ import {
   runLatencyBaselineCheck,
   runOpenApiSchemaConformance,
   runStatusCodeDeclaredCheck,
+  runBusinessLogicStateInjectionProbe,
+  runSensitiveDataExposureCheck,
   executeTestJob,
   registeredRunners,
 } from "../index.js";
@@ -243,6 +245,88 @@ describe("Test Engine & Probe Suite", () => {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ slow: true }));
         }, 30);
+        return;
+      }
+
+      // Mass assignment: accepts numeric financial fields when authenticated
+      if (pathname === "/balance-assignment-vulnerable") {
+        const auth = req.headers["authorization"];
+        let body = "";
+        req.on("data", (chunk) => { body += chunk; });
+        req.on("end", () => {
+          if (auth) {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ updated: true }));
+          } else {
+            res.writeHead(401, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Unauthorized" }));
+          }
+        });
+        return;
+      }
+
+      // Info leakage via query param on a GET-only endpoint
+      if (pathname === "/audit/search") {
+        const q = url.searchParams.get("q") ?? "";
+        if (q.includes("'")) {
+          res.writeHead(500, { "Content-Type": "text/plain" });
+          res.end("SqliteError: near \"OR\": syntax error\n    at StatementSync.all (/app/db.js:10:5)");
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ results: [] }));
+        return;
+      }
+
+      // Business logic state injection: accepts any POST body and returns 200
+      if (pathname === "/transfers-vulnerable") {
+        let body = "";
+        req.on("data", (chunk) => { body += chunk; });
+        req.on("end", () => {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ created: true }));
+        });
+        return;
+      }
+
+      if (pathname === "/transfers-safe") {
+        let body = "";
+        req.on("data", (chunk) => { body += chunk; });
+        req.on("end", () => {
+          const parsed = JSON.parse(body || "{}") as Record<string, unknown>;
+          if ("status" in parsed || "approved" in parsed) {
+            res.writeHead(422, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Unexpected field" }));
+            return;
+          }
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ created: true }));
+        });
+        return;
+      }
+
+      // Sensitive data exposure: returns a raw PAN
+      if (pathname === "/cards-exposed") {
+        const auth = req.headers["authorization"];
+        if (!auth) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Unauthorized" }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify([{ pan: "4111111111111111", "cvv": "123" }]));
+        return;
+      }
+
+      if (pathname === "/cards-masked") {
+        const auth = req.headers["authorization"];
+        if (!auth) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Unauthorized" }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify([{ pan: "****1111", last4: "1111" }]));
         return;
       }
 
@@ -569,6 +653,110 @@ describe("Test Engine & Probe Suite", () => {
       expect(result.severity).toBe("critical");
       expect(result.detail.evidence).toContain("syntax error");
     });
+
+    it("mass_assignment_probe detects numeric financial field injection when authenticated", async () => {
+      const authProfiles = {
+        primary: { name: "User A", token: "token-a" },
+      };
+      const result = await runMassAssignmentProbe(
+        {
+          ...baseJob,
+          baseUrl,
+          method: "PUT",
+          path: "/balance-assignment-vulnerable",
+          config: { authProfiles },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("fail");
+      expect(result.severity).toBe("high");
+      expect(result.detail.evidence).toContain("attacker-supplied values");
+    });
+
+    it("info_leakage_error_traces detects stack trace via query param on GET endpoint", async () => {
+      const result = await runInfoLeakageCheck(
+        {
+          ...baseJob,
+          baseUrl,
+          method: "GET",
+          path: "/audit/search",
+          parameters: [{ name: "q", in: "query", required: false }],
+        },
+        probeClient
+      );
+      expect(result.status).toBe("fail");
+      expect(result.severity).toBe("high");
+      expect(result.detail.evidence).toContain("via query parameter");
+    });
+
+    it("business_logic_state_injection fails when endpoint accepts state override fields", async () => {
+      const result = await runBusinessLogicStateInjectionProbe(
+        {
+          ...baseJob,
+          baseUrl,
+          method: "POST",
+          path: "/transfers-vulnerable",
+          requestSchema: { type: "object", properties: { amount: { type: "number" } } },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("fail");
+      expect(result.severity).toBe("high");
+      expect(result.detail.evidence).toContain("state machine");
+    });
+
+    it("business_logic_state_injection passes when endpoint rejects state override fields", async () => {
+      const result = await runBusinessLogicStateInjectionProbe(
+        {
+          ...baseJob,
+          baseUrl,
+          method: "POST",
+          path: "/transfers-safe",
+          requestSchema: { type: "object", properties: { amount: { type: "number" } } },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("pass");
+      expect(result.severity).toBe("info");
+    });
+
+    it("sensitive_data_exposure warns when no auth profile is configured", async () => {
+      const result = await runSensitiveDataExposureCheck(
+        { ...baseJob, baseUrl, path: "/cards-exposed" },
+        probeClient
+      );
+      expect(result.status).toBe("warn");
+      expect(result.detail.evidence).toContain("no primary auth profile");
+    });
+
+    it("sensitive_data_exposure fails when a raw PAN is returned in the response", async () => {
+      const result = await runSensitiveDataExposureCheck(
+        {
+          ...baseJob,
+          baseUrl,
+          path: "/cards-exposed",
+          config: { authProfiles: { primary: { name: "User A", token: "token-a" } } },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("fail");
+      expect(result.severity).toBe("critical");
+      expect(result.detail.evidence).toContain("unmasked payment card number");
+    });
+
+    it("sensitive_data_exposure passes when only masked card data is returned", async () => {
+      const result = await runSensitiveDataExposureCheck(
+        {
+          ...baseJob,
+          baseUrl,
+          path: "/cards-masked",
+          config: { authProfiles: { primary: { name: "User A", token: "token-a" } } },
+        },
+        probeClient
+      );
+      expect(result.status).toBe("pass");
+      expect(result.severity).toBe("info");
+    });
   });
 
   describe("Performance Probes", () => {
@@ -712,11 +900,13 @@ describe("Test Engine & Probe Suite", () => {
 
   describe("Unified Runner Dispatcher & Catalogue", () => {
     it("exposes registered runners catalogue", () => {
-      expect(registeredRunners.length).toBeGreaterThanOrEqual(11);
+      expect(registeredRunners.length).toBeGreaterThanOrEqual(13);
       const names = registeredRunners.map((r) => r.name);
       expect(names).toContain("auth_missing_token");
       expect(names).toContain("latency_baseline_distribution");
       expect(names).toContain("openapi_schema_conformance");
+      expect(names).toContain("business_logic_state_injection");
+      expect(names).toContain("sensitive_data_exposure");
     });
 
     it("dispatches job across categories via executeTestJob", async () => {
