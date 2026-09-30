@@ -11,8 +11,13 @@ import {
   Unlock,
   Key,
   ExternalLink,
+  ArrowUpDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
 } from "lucide-react";
 import type { EndpointSummary, TestFinding } from "../types.js";
+
+type ScorecardSort = "risk" | "failures" | "path" | "spec";
 
 export interface EndpointScorecardProps {
   endpoints: EndpointSummary[];
@@ -55,6 +60,7 @@ export function EndpointScorecard({
   const [searchTerm, setSearchTerm] = useState("");
   const [methodFilter, setMethodFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ISSUES" | "CLEAN">("ALL");
+  const [sortBy, setSortBy] = useState<ScorecardSort>("risk");
   const [expandedEndpoints, setExpandedEndpoints] = useState<Set<string>>(new Set());
 
   // Group findings by endpointId or method+path fallback
@@ -132,6 +138,37 @@ export function EndpointScorecard({
       return true;
     });
   }, [scorecards, methodFilter, statusFilter, searchTerm]);
+
+  const sortedScorecards = useMemo(() => {
+    const list = [...filteredScorecards];
+    switch (sortBy) {
+      case "risk":
+        return list.sort((a, b) => b.riskScore - a.riskScore);
+      case "failures":
+        return list.sort((a, b) => b.fail - a.fail || b.warn - a.warn);
+      case "path":
+        return list.sort((a, b) => a.endpoint.path.localeCompare(b.endpoint.path));
+      case "spec":
+        return list;
+    }
+  }, [filteredScorecards, sortBy]);
+
+  const allExpanded =
+    sortedScorecards.length > 0 &&
+    sortedScorecards.every((sc) => expandedEndpoints.has(sc.endpoint.id));
+
+  const toggleExpandAll = () => {
+    setExpandedEndpoints(
+      allExpanded ? new Set() : new Set(sortedScorecards.map((sc) => sc.endpoint.id))
+    );
+  };
+
+  const getRiskMeterColor = (score: number) => {
+    if (score > 60) return "bg-rose-500";
+    if (score > 30) return "bg-amber-400";
+    if (score > 0) return "bg-sky-400";
+    return "bg-emerald-500";
+  };
 
   const toggleExpand = (id: string) => {
     setExpandedEndpoints((prev) => {
@@ -267,38 +304,74 @@ export function EndpointScorecard({
             <option value="ISSUES">Issues found</option>
             <option value="CLEAN">Clean routes</option>
           </select>
+
+          <div className="relative">
+            <ArrowUpDown className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-zinc-400 pointer-events-none" />
+            <select
+              aria-label="Sort routes"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as ScorecardSort)}
+              className="pl-8 pr-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-700 font-medium focus:outline-hidden focus:border-zinc-400"
+            >
+              <option value="risk">Highest risk</option>
+              <option value="failures">Most failures</option>
+              <option value="path">Path (A-Z)</option>
+              <option value="spec">Spec order</option>
+            </select>
+          </div>
+
+          {sortedScorecards.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleExpandAll}
+              title={allExpanded ? "Collapse all routes" : "Expand all routes"}
+              aria-label={allExpanded ? "Collapse all routes" : "Expand all routes"}
+              className="p-1.5 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-600 transition-colors"
+            >
+              {allExpanded ? (
+                <ChevronsDownUp className="w-3.5 h-3.5" />
+              ) : (
+                <ChevronsUpDown className="w-3.5 h-3.5" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Scorecard Table */}
-      {filteredScorecards.length === 0 ? (
+      {sortedScorecards.length === 0 ? (
         <div className="p-8 text-center text-zinc-500 text-xs">
           No endpoints match your search.
         </div>
       ) : (
         <div className="divide-y divide-zinc-100">
-          {filteredScorecards.map((sc) => {
+          {sortedScorecards.map((sc) => {
             const isExpanded = expandedEndpoints.has(sc.endpoint.id);
 
             return (
               <div key={sc.endpoint.id} className="transition-colors hover:bg-zinc-50/50">
                 <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
                   onClick={() => toggleExpand(sc.endpoint.id)}
-                  className="px-4 py-3 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleExpand(sc.endpoint.id);
+                    }
+                  }}
+                  className="px-4 py-3 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs focus:outline-none focus-visible:bg-zinc-100"
                 >
                   {/* Endpoint Method, Path, Auth */}
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <button
-                      type="button"
-                      aria-label="Expand endpoint findings"
-                      className="p-0.5 text-zinc-400 hover:text-zinc-600 transition-colors"
-                    >
+                    <span aria-hidden="true" className="p-0.5 text-zinc-400">
                       {isExpanded ? (
                         <ChevronDown className="w-4 h-4" />
                       ) : (
                         <ChevronRight className="w-4 h-4" />
                       )}
-                    </button>
+                    </span>
 
                     <span
                       className={`px-1.5 py-0.5 rounded text-[11px] font-bold font-mono border ${getMethodBadge(
@@ -363,6 +436,15 @@ export function EndpointScorecard({
                     {/* Risk Score */}
                     <div className="flex items-center gap-1.5">
                       <span className="text-zinc-400 text-[10px] uppercase tracking-wider">Risk</span>
+                      <div
+                        className="hidden md:block w-12 h-1.5 rounded-full bg-zinc-100 overflow-hidden"
+                        aria-hidden="true"
+                      >
+                        <div
+                          className={`h-full rounded-full ${getRiskMeterColor(sc.riskScore)}`}
+                          style={{ width: `${sc.riskScore}%` }}
+                        />
+                      </div>
                       {getRiskScoreBadge(sc.riskScore)}
                     </div>
                   </div>
@@ -385,8 +467,16 @@ export function EndpointScorecard({
                         {sc.findings.map((f) => (
                           <div
                             key={f.id}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => onSelectFinding?.(f)}
-                            className="p-2.5 bg-white rounded-lg border border-zinc-200 hover:border-zinc-400 hover:shadow-xs cursor-pointer transition-all flex items-center justify-between gap-3 text-xs"
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onSelectFinding?.(f);
+                              }
+                            }}
+                            className="p-2.5 bg-white rounded-lg border border-zinc-200 hover:border-zinc-400 hover:shadow-xs focus:outline-none focus-visible:border-zinc-500 cursor-pointer transition-all flex items-center justify-between gap-3 text-xs"
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               {f.status === "pass" && (

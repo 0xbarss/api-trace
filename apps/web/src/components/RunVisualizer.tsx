@@ -12,6 +12,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type { RunSummary } from "../types.js";
+import { computeRunRate, formatDuration } from "../lib/run-stats.js";
 
 export interface RunVisualizerProps {
   runs: RunSummary[];
@@ -41,7 +42,7 @@ export function RunVisualizer({
       return;
     }
 
-    if (activeRun.status === "completed" && activeRun.startedAt && activeRun.finishedAt) {
+    if (activeRun.startedAt && activeRun.finishedAt) {
       const start = new Date(activeRun.startedAt).getTime();
       const end = new Date(activeRun.finishedAt).getTime();
       setElapsedSeconds(Math.max(0, Math.round((end - start) / 1000)));
@@ -58,14 +59,9 @@ export function RunVisualizer({
       const timer = setInterval(calcElapsed, 1000);
       return () => clearInterval(timer);
     }
-  }, [activeRun]);
 
-  const formatDuration = (totalSec: number) => {
-    if (totalSec < 60) return `${totalSec}s`;
-    const m = Math.floor(totalSec / 60);
-    const s = totalSec % 60;
-    return `${m}m ${s}s`;
-  };
+    setElapsedSeconds(0);
+  }, [activeRun]);
 
   const total = activeRun?.totalTests ?? 0;
   const completed = activeRun?.completedTests ?? 0;
@@ -74,6 +70,12 @@ export function RunVisualizer({
   const failed = activeRun?.failedTests ?? 0;
 
   const percentage = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  const segmentWidth = (count: number): number =>
+    total > 0 ? Math.min(100, (count / total) * 100) : 0;
+  const shareOfCompleted = (count: number): number =>
+    completed > 0 ? Math.round((count / completed) * 100) : 0;
+  const isActive = activeRun?.status === "running";
+  const { perSecond, etaSeconds } = computeRunRate(completed, total, elapsedSeconds);
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -177,6 +179,16 @@ export function RunVisualizer({
               <span>Runtime: {formatDuration(elapsedSeconds)}</span>
             </div>
 
+            {isActive && perSecond !== null && (
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-50 border border-zinc-200 font-mono text-zinc-600">
+                <Activity className="w-3.5 h-3.5 text-emerald-600" />
+                <span>
+                  {perSecond.toFixed(1)} tests/s
+                  {etaSeconds !== null && ` · ~${formatDuration(etaSeconds)} left`}
+                </span>
+              </div>
+            )}
+
             {/* Refresh Action */}
             <button
               type="button"
@@ -199,14 +211,28 @@ export function RunVisualizer({
             </span>
           </div>
 
-          <div className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/80">
+          <div
+            role="progressbar"
+            aria-label="Test run progress"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={percentage}
+            className="w-full h-2.5 bg-zinc-100 rounded-full overflow-hidden border border-zinc-200/80 flex"
+          >
             <div
-              className={`h-full transition-all duration-300 ease-out rounded-full ${
-                activeRun?.status === "completed"
-                  ? "bg-emerald-600"
-                  : "bg-emerald-500"
-              }`}
-              style={{ width: `${percentage}%` }}
+              className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+              style={{ width: `${segmentWidth(passed)}%` }}
+              title={`${passed} passed`}
+            />
+            <div
+              className="h-full bg-amber-400 transition-all duration-300 ease-out"
+              style={{ width: `${segmentWidth(warnings)}%` }}
+              title={`${warnings} warnings`}
+            />
+            <div
+              className="h-full bg-rose-500 transition-all duration-300 ease-out"
+              style={{ width: `${segmentWidth(failed)}%` }}
+              title={`${failed} failed`}
             />
           </div>
         </div>
@@ -235,7 +261,7 @@ export function RunVisualizer({
           <div className="text-2xl font-bold font-mono text-emerald-700 mt-1">
             {passed}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-0.5">Passed tests</div>
+          <div className="text-[11px] text-zinc-400 mt-0.5">{shareOfCompleted(passed)}% of completed</div>
         </div>
 
         {/* Warnings */}
@@ -247,7 +273,7 @@ export function RunVisualizer({
           <div className="text-2xl font-bold font-mono text-amber-700 mt-1">
             {warnings}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-0.5">Non-blocking notices</div>
+          <div className="text-[11px] text-zinc-400 mt-0.5">{shareOfCompleted(warnings)}% of completed</div>
         </div>
 
         {/* Failed */}
@@ -259,7 +285,7 @@ export function RunVisualizer({
           <div className="text-2xl font-bold font-mono text-rose-700 mt-1">
             {failed}
           </div>
-          <div className="text-[11px] text-zinc-400 mt-0.5">Failed tests</div>
+          <div className="text-[11px] text-zinc-400 mt-0.5">{shareOfCompleted(failed)}% of completed</div>
         </div>
       </div>
     </div>

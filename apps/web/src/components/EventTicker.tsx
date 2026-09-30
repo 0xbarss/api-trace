@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Radio,
   Search,
@@ -15,6 +15,9 @@ import {
   ExternalLink,
 } from "lucide-react";
 import type { WebSocketRunEvent, TestFinding } from "../types.js";
+import { safePathname } from "../lib/format.js";
+
+const PAGE_SIZE = 200;
 
 export interface EventTickerProps {
   runId: string | null;
@@ -35,6 +38,8 @@ export function EventTicker({
 }: EventTickerProps): React.ReactElement {
   const [filterOutcome, setFilterOutcome] = useState<"ALL" | "FAIL" | "WARN" | "PASS">("ALL");
   const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<"ALL" | TestFinding["category"]>("ALL");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   // Extract findings from events
@@ -64,6 +69,7 @@ export function EventTicker({
       if (filterOutcome === "FAIL" && item.status !== "fail") return false;
       if (filterOutcome === "WARN" && item.status !== "warn") return false;
       if (filterOutcome === "PASS" && item.status !== "pass") return false;
+      if (categoryFilter !== "ALL" && item.category !== categoryFilter) return false;
 
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
@@ -74,7 +80,13 @@ export function EventTicker({
       }
       return true;
     });
-  }, [findingsList, filterOutcome, searchTerm]);
+  }, [findingsList, filterOutcome, searchTerm, categoryFilter]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filterOutcome, searchTerm, categoryFilter, runId]);
+
+  const visibleFindings = filteredFindings.slice(0, visibleCount);
 
   const toggleExpand = (id: string) => {
     setExpandedIds((prev) => {
@@ -145,6 +157,18 @@ export function EventTicker({
               className="h-7.5 w-44 pl-8 pr-2.5 rounded-md bg-white border border-zinc-200 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 transition-colors"
             />
           </div>
+
+          <select
+            aria-label="Filter by test category"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value as "ALL" | TestFinding["category"])}
+            className="h-7.5 px-2 rounded-md bg-white border border-zinc-200 text-xs text-zinc-700 focus:outline-none focus:border-zinc-400"
+          >
+            <option value="ALL">All categories</option>
+            <option value="security">Security</option>
+            <option value="performance">Performance</option>
+            <option value="contract">Contract</option>
+          </select>
 
           {/* Pause / Resume Button */}
           {onToggleStreaming && (
@@ -234,7 +258,7 @@ export function EventTicker({
         </div>
 
         <span className="text-[11px] font-mono text-zinc-400 shrink-0">
-          Showing {filteredFindings.length} events
+          Showing {visibleFindings.length} of {filteredFindings.length} events
         </span>
       </div>
 
@@ -250,12 +274,13 @@ export function EventTicker({
             </div>
           </div>
         ) : (
-          filteredFindings.map((finding) => {
+          visibleFindings.map((finding) => {
             const isExpanded = expandedIds.has(finding.id);
             const method = finding.detail.requestSent?.method || "GET";
-            const urlPath = finding.detail.requestSent?.url
-              ? new URL(finding.detail.requestSent.url, "http://localhost").pathname
-              : `/endpoint/${finding.endpointId}`;
+            const urlPath = safePathname(
+              finding.detail.requestSent?.url,
+              `/endpoint/${finding.endpointId}`
+            );
 
             return (
               <div
@@ -270,17 +295,26 @@ export function EventTicker({
               >
                 {/* Event Row Summary */}
                 <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
                   onClick={() => toggleExpand(finding.id)}
-                  className="p-3 flex items-center justify-between gap-3 cursor-pointer select-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleExpand(finding.id);
+                    }
+                  }}
+                  className="p-3 flex items-center justify-between gap-3 cursor-pointer select-none focus:outline-none focus-visible:bg-zinc-100"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <button type="button" className="text-zinc-400 shrink-0">
+                    <span aria-hidden="true" className="text-zinc-400 shrink-0">
                       {isExpanded ? (
                         <ChevronDown className="w-3.5 h-3.5" />
                       ) : (
                         <ChevronRight className="w-3.5 h-3.5" />
                       )}
-                    </button>
+                    </span>
 
                     {/* Outcome Icon */}
                     {finding.status === "pass" && (
@@ -407,6 +441,18 @@ export function EventTicker({
           })
         )}
       </div>
+
+      {filteredFindings.length > visibleCount && (
+        <div className="p-2.5 border-t border-zinc-100 bg-zinc-50/60 text-center">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+            className="px-3 py-1 rounded-md border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-medium text-zinc-700 transition-colors"
+          >
+            Show {Math.min(PAGE_SIZE, filteredFindings.length - visibleCount)} more
+          </button>
+        </div>
+      )}
     </div>
   );
 }

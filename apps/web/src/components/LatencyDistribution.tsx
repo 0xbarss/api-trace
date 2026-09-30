@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Clock, Zap, Activity, AlertCircle } from "lucide-react";
 import type { TestFinding } from "../types.js";
 
@@ -16,9 +16,13 @@ export function calculatePercentile(values: number[], percentile: number): numbe
   return sorted[index];
 }
 
+const ENDPOINT_PREVIEW_COUNT = 10;
+
 export function LatencyDistribution({
   findings,
 }: LatencyDistributionProps): React.ReactElement {
+  const [showAllEndpoints, setShowAllEndpoints] = useState(false);
+
   // Extract all valid latency measurements
   const { samples, min, max, avg, p50, p95, p99, histogram, endpointLatencies } = useMemo(() => {
     const latencies: number[] = [];
@@ -230,7 +234,7 @@ export function LatencyDistribution({
                   />
                 </div>
                 <div className="text-[9px] font-mono text-zinc-400 truncate max-w-full mt-2 text-center">
-                  {bucket.start}m
+                  {bucket.start}ms
                 </div>
               </div>
             );
@@ -253,7 +257,10 @@ export function LatencyDistribution({
         </div>
 
         <div className="divide-y divide-zinc-100 overflow-x-auto">
-          {endpointLatencies.map((ep, i) => {
+          {(showAllEndpoints
+            ? endpointLatencies
+            : endpointLatencies.slice(0, ENDPOINT_PREVIEW_COUNT)
+          ).map((ep, i) => {
             const barWidth = Math.max(5, Math.min(100, Math.round((ep.p95 / Math.max(max, 1)) * 100)));
 
             return (
@@ -308,6 +315,20 @@ export function LatencyDistribution({
             );
           })}
         </div>
+
+        {endpointLatencies.length > ENDPOINT_PREVIEW_COUNT && (
+          <div className="p-2.5 border-t border-zinc-100 bg-zinc-50/60 text-center">
+            <button
+              type="button"
+              onClick={() => setShowAllEndpoints((v) => !v)}
+              className="px-3 py-1 rounded-md border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-mono font-medium text-zinc-700 transition-colors"
+            >
+              {showAllEndpoints
+                ? `Show slowest ${ENDPOINT_PREVIEW_COUNT} only`
+                : `Show all ${endpointLatencies.length} endpoints`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

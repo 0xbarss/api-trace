@@ -20,10 +20,16 @@ import {
   XCircle,
   CheckCircle2,
   ArrowRight,
+  ArrowUpDown,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { TargetSummary, TargetDetail, EndpointSummary, AuthProfilesInput, RunSummary } from "../types.js";
 import { AuthProfilesModal } from "./AuthProfilesModal.js";
 import { Dialog } from "./Dialog.js";
+import { formatRelativeTime } from "../lib/format.js";
+
+type TargetSort = "recent" | "name" | "risk" | "endpoints";
 
 interface TargetCatalogProps {
   targets: TargetSummary[];
@@ -49,6 +55,8 @@ export function TargetCatalog({
   onGoToRun,
 }: TargetCatalogProps): React.ReactElement {
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<TargetSort>("recent");
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [inspectingTarget, setInspectingTarget] = useState<TargetDetail | null>(null);
   const [authTarget, setAuthTarget] = useState<TargetDetail | null>(null);
   const [endpointSearch, setEndpointSearch] = useState("");
@@ -67,6 +75,32 @@ export function TargetCatalog({
       t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.baseUrl.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const visibleTargets = [...filteredTargets].sort((a, b) => {
+    switch (sortBy) {
+      case "name":
+        return a.name.localeCompare(b.name);
+      case "risk":
+        return (b.riskScore ?? 0) - (a.riskScore ?? 0);
+      case "endpoints":
+        return b.endpointsCount - a.endpointsCount;
+      case "recent":
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
+
+  const totalEndpoints = targets.reduce((sum, t) => sum + t.endpointsCount, 0);
+  const highRiskTargets = targets.filter((t) => (t.riskScore ?? 0) >= 50).length;
+
+  const handleCopyPath = async (path: string) => {
+    try {
+      await navigator.clipboard.writeText(path);
+      setCopiedPath(path);
+      window.setTimeout(() => setCopiedPath((current) => (current === path ? null : current)), 1500);
+    } catch (err) {
+      console.error("Failed to copy route:", err);
+    }
+  };
 
   useEffect(() => {
     if (!inspectingTarget) return;
@@ -220,6 +254,15 @@ export function TargetCatalog({
     );
   };
 
+  const methodCounts = (inspectingTarget?.endpoints || []).reduce<Record<string, number>>(
+    (acc, ep) => {
+      const m = ep.method.toUpperCase();
+      acc[m] = (acc[m] ?? 0) + 1;
+      return acc;
+    },
+    {}
+  );
+
   // Filtered endpoints inside inspection drawer
   const inspectedEndpoints = (inspectingTarget?.endpoints || []).filter((ep) => {
     const matchesMethod =
@@ -245,6 +288,14 @@ export function TargetCatalog({
               {targets.length}
             </span>
           </div>
+          {targets.length > 0 && (
+            <span className="hidden md:inline text-[11px] font-mono text-zinc-500">
+              {totalEndpoints} endpoints
+              {highRiskTargets > 0 && (
+                <span className="text-rose-600"> · {highRiskTargets} high risk</span>
+              )}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -257,6 +308,21 @@ export function TargetCatalog({
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full h-8 pl-8 pr-3 rounded-md bg-zinc-50 border border-zinc-200 text-xs text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-400 focus:bg-white transition-colors"
             />
+          </div>
+
+          <div className="relative shrink-0">
+            <ArrowUpDown className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
+            <select
+              aria-label="Sort targets"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as TargetSort)}
+              className="h-8 pl-8 pr-2 rounded-md bg-zinc-50 border border-zinc-200 text-xs text-zinc-700 focus:outline-none focus:border-zinc-400 cursor-pointer"
+            >
+              <option value="recent">Recently added</option>
+              <option value="name">Name (A-Z)</option>
+              <option value="risk">Highest risk</option>
+              <option value="endpoints">Most endpoints</option>
+            </select>
           </div>
 
           <button
@@ -272,8 +338,31 @@ export function TargetCatalog({
 
       {/* Target Cards Grid */}
       {loading ? (
-        <div className="p-12 text-center text-xs text-zinc-500 bg-white rounded-lg border border-zinc-200">
-          Loading targets...
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 gap-3.5"
+          role="status"
+          aria-label="Loading targets"
+        >
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="bg-white rounded-lg border border-zinc-200 p-4 shadow-xs space-y-3 animate-pulse"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-2 flex-1">
+                  <div className="h-3 w-32 rounded bg-zinc-200" />
+                  <div className="h-2.5 w-48 rounded bg-zinc-100" />
+                </div>
+                <div className="h-5 w-20 rounded bg-zinc-100" />
+              </div>
+              <div className="h-2.5 w-24 rounded bg-zinc-100" />
+              <div className="flex gap-1.5 pt-2 border-t border-zinc-100">
+                <div className="h-6 w-20 rounded bg-zinc-100" />
+                <div className="h-6 w-24 rounded bg-zinc-100" />
+                <div className="h-6 w-20 rounded bg-zinc-100" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filteredTargets.length === 0 ? (
         <div className="p-10 text-center space-y-3 bg-white rounded-lg border border-zinc-200">
@@ -299,7 +388,7 @@ export function TargetCatalog({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {filteredTargets.map((target) => (
+          {visibleTargets.map((target) => (
             <div
               key={target.id}
               className="bg-white rounded-lg border border-zinc-200 p-4 shadow-xs hover:border-zinc-300 transition-all flex flex-col justify-between space-y-3"
@@ -322,6 +411,13 @@ export function TargetCatalog({
                     <Layers className="w-3.5 h-3.5 text-zinc-400" />
                     <span>{target.endpointsCount} endpoints</span>
                   </div>
+                  <span className="text-zinc-300">·</span>
+                  <span
+                    className="text-[11px] text-zinc-500"
+                    title={new Date(target.createdAt).toLocaleString()}
+                  >
+                    Added {formatRelativeTime(target.createdAt)}
+                  </span>
                 </div>
 
                 {/* Recent runs for this target */}
@@ -330,11 +426,35 @@ export function TargetCatalog({
                     .filter((r) => r.targetId === target.id)
                     .slice(0, 3);
                   if (targetRuns.length === 0) return null;
+                  const latestDone = targetRuns.find((r) => r.status === "completed");
+                  const outcomeTotal = latestDone
+                    ? latestDone.passedTests + latestDone.warningTests + latestDone.failedTests
+                    : 0;
                   return (
                     <div className="mt-2 pt-2 border-t border-zinc-100 space-y-1">
                       <div className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider mb-1">
                         Recent runs
                       </div>
+                      {latestDone && outcomeTotal > 0 && (
+                        <div
+                          className="h-1.5 w-full rounded-full overflow-hidden bg-zinc-100 flex mb-1.5"
+                          role="img"
+                          aria-label={`Latest completed run: ${latestDone.passedTests} passed, ${latestDone.warningTests} warnings, ${latestDone.failedTests} failed`}
+                        >
+                          <div
+                            className="h-full bg-emerald-500"
+                            style={{ width: `${(latestDone.passedTests / outcomeTotal) * 100}%` }}
+                          />
+                          <div
+                            className="h-full bg-amber-400"
+                            style={{ width: `${(latestDone.warningTests / outcomeTotal) * 100}%` }}
+                          />
+                          <div
+                            className="h-full bg-rose-500"
+                            style={{ width: `${(latestDone.failedTests / outcomeTotal) * 100}%` }}
+                          />
+                        </div>
+                      )}
                       {targetRuns.map((run) => (
                         <button
                           key={run.id}
@@ -481,7 +601,7 @@ export function TargetCatalog({
               </div>
 
               <div className="flex items-center gap-1 text-[11px] font-mono">
-                {["ALL", "GET", "POST", "PUT", "DELETE"].map((m) => (
+                {["ALL", "GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => (
                   <button
                     key={m}
                     type="button"
@@ -493,6 +613,9 @@ export function TargetCatalog({
                     }`}
                   >
                     {m}
+                    <span className="ml-1 opacity-60">
+                      {m === "ALL" ? inspectingTarget.endpoints.length : methodCounts[m] ?? 0}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -519,6 +642,19 @@ export function TargetCatalog({
                         <span className="text-xs font-mono text-zinc-900 font-medium truncate">
                           {ep.path}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyPath(ep.path)}
+                          aria-label={`Copy path ${ep.path}`}
+                          title="Copy path"
+                          className="p-1 rounded text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors shrink-0"
+                        >
+                          {copiedPath === ep.path ? (
+                            <Check className="w-3 h-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
@@ -526,6 +662,20 @@ export function TargetCatalog({
                           {getAuthIcon(ep.authType)}
                           <span>{ep.authType}</span>
                         </div>
+                        {ep.riskScore > 0 && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono border ${
+                              ep.riskScore >= 50
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : ep.riskScore >= 20
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}
+                            title="Endpoint risk score"
+                          >
+                            risk {ep.riskScore}
+                          </span>
+                        )}
                         {ep.parameters && ep.parameters.length > 0 && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-100 text-zinc-600 border border-zinc-200">
                             {ep.parameters.length} params

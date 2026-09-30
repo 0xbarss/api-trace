@@ -14,6 +14,8 @@ import {
   ChevronDown,
   RotateCcw,
   FileDown,
+  ArrowUpDown,
+  X,
 } from "lucide-react";
 import type {
   RunSummary,
@@ -26,6 +28,10 @@ import { LatencyDistribution } from "./LatencyDistribution.js";
 import { FindingModal } from "./FindingModal.js";
 import { apiClient } from "../api/client.js";
 import { useExport } from "../hooks/useExport.js";
+import { matchesSeverityFilter, sortFindings } from "../lib/findings.js";
+import type { FindingSort } from "../lib/findings.js";
+
+const PAGE_SIZE = 100;
 
 export interface FindingsViewProps {
   runs: RunSummary[];
@@ -53,6 +59,8 @@ export function FindingsView({
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<FindingSort>("severity");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const activeRun = runs.find((r) => r.id === activeRunId) || runs[0] || null;
   const activeTarget = targets.find((t) => t.id === activeRun?.targetId);
@@ -121,24 +129,32 @@ export function FindingsView({
     let fail = 0;
     let critical = 0;
     let high = 0;
+    let medium = 0;
+    let low = 0;
+    let info = 0;
 
     for (const f of findings) {
       if (f.status === "pass") pass++;
       else if (f.status === "warn") warn++;
       else if (f.status === "fail") fail++;
 
-      if (f.severity === "critical") critical++;
-      else if (f.severity === "high") high++;
+      if (f.status !== "pass") {
+        if (f.severity === "critical") critical++;
+        else if (f.severity === "high") high++;
+        else if (f.severity === "medium") medium++;
+        else if (f.severity === "low") low++;
+        else info++;
+      }
     }
 
-    return { total: findings.length, pass, warn, fail, critical, high };
+    return { total: findings.length, pass, warn, fail, critical, high, medium, low, info };
   }, [findings]);
 
   // Filtered findings for drilldown view
   const filteredFindings = useMemo(() => {
-    return findings.filter((f) => {
+    const matching = findings.filter((f) => {
       if (statusFilter !== "ALL" && f.status.toUpperCase() !== statusFilter) return false;
-      if (severityFilter !== "ALL" && f.severity.toUpperCase() !== severityFilter) return false;
+      if (!matchesSeverityFilter(f.severity, severityFilter)) return false;
       if (categoryFilter !== "ALL" && f.category.toUpperCase() !== categoryFilter) return false;
 
       if (searchQuery.trim()) {
@@ -151,7 +167,34 @@ export function FindingsView({
 
       return true;
     });
-  }, [findings, statusFilter, severityFilter, categoryFilter, searchQuery]);
+    return sortFindings(matching, sortBy);
+  }, [findings, statusFilter, severityFilter, categoryFilter, searchQuery, sortBy]);
+
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [statusFilter, severityFilter, categoryFilter, searchQuery, sortBy, activeRun?.id]);
+
+  const visibleFindings = filteredFindings.slice(0, visibleCount);
+  const hasActiveFilters =
+    statusFilter !== "ALL" ||
+    severityFilter !== "ALL" ||
+    categoryFilter !== "ALL" ||
+    searchQuery.trim() !== "";
+
+  const clearFilters = () => {
+    setStatusFilter("ALL");
+    setSeverityFilter("ALL");
+    setCategoryFilter("ALL");
+    setSearchQuery("");
+  };
+
+  const applyQuickFilter = (next: { status?: string; severity?: string }) => {
+    setStatusFilter(next.status ?? "ALL");
+    setSeverityFilter(next.severity ?? "ALL");
+    setCategoryFilter("ALL");
+    setSearchQuery("");
+    setActiveSubTab("drilldown");
+  };
 
   const { exportJson, exportCsv } = useExport(filteredFindings, activeRun?.id ?? null);
 
@@ -235,40 +278,107 @@ export function FindingsView({
         </div>
       </div>
 
-      {/* KPI Stat Cards */}
+      {/* KPI Stat Cards (click to drill into the matching findings) */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <div className="bg-white border border-zinc-200 rounded-lg p-3 shadow-xs">
-          <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Total tests</div>
-          <div className="mt-1 text-lg font-bold font-mono text-zinc-900">{metrics.total}</div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">Executed checks</div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-lg p-3 shadow-xs">
-          <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Passed</div>
-          <div className="mt-1 text-lg font-bold font-mono text-emerald-600">{metrics.pass}</div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">Passed checks</div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-lg p-3 shadow-xs">
-          <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Warnings</div>
-          <div className="mt-1 text-lg font-bold font-mono text-amber-600">{metrics.warn}</div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">Non-blocking notices</div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-lg p-3 shadow-xs">
-          <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Failed</div>
-          <div className="mt-1 text-lg font-bold font-mono text-rose-600">{metrics.fail}</div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">Failed checks</div>
-        </div>
-
-        <div className="bg-white border border-zinc-200 rounded-lg p-3 shadow-xs">
-          <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Critical / High</div>
-          <div className="mt-1 text-lg font-bold font-mono text-rose-700">
-            {metrics.critical + metrics.high}
-          </div>
-          <div className="text-[10px] text-zinc-400 mt-0.5">High priority</div>
-        </div>
+        {[
+          {
+            key: "total",
+            label: "Total tests",
+            value: metrics.total,
+            valueClass: "text-zinc-900",
+            hint: "All executed checks",
+            onClick: () => applyQuickFilter({}),
+          },
+          {
+            key: "pass",
+            label: "Passed",
+            value: metrics.pass,
+            valueClass: "text-emerald-600",
+            hint: metrics.total > 0 ? `${Math.round((metrics.pass / metrics.total) * 100)}% pass rate` : "No checks yet",
+            onClick: () => applyQuickFilter({ status: "PASS" }),
+          },
+          {
+            key: "warn",
+            label: "Warnings",
+            value: metrics.warn,
+            valueClass: "text-amber-600",
+            hint: "Non-blocking notices",
+            onClick: () => applyQuickFilter({ status: "WARN" }),
+          },
+          {
+            key: "fail",
+            label: "Failed",
+            value: metrics.fail,
+            valueClass: "text-rose-600",
+            hint: "Failed checks",
+            onClick: () => applyQuickFilter({ status: "FAIL" }),
+          },
+          {
+            key: "priority",
+            label: "Critical / High",
+            value: metrics.critical + metrics.high,
+            valueClass: "text-rose-700",
+            hint: `${metrics.critical} critical · ${metrics.high} high`,
+            onClick: () => applyQuickFilter({ severity: "CRITICAL_HIGH" }),
+          },
+        ].map((card) => (
+          <button
+            key={card.key}
+            type="button"
+            onClick={card.onClick}
+            title="View these findings"
+            className="text-left bg-white border border-zinc-200 rounded-lg p-3 shadow-xs hover:border-zinc-400 hover:shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
+          >
+            <div className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">{card.label}</div>
+            <div className={`mt-1 text-lg font-bold font-mono ${card.valueClass}`}>{card.value}</div>
+            <div className="text-[10px] text-zinc-400 mt-0.5">{card.hint}</div>
+          </button>
+        ))}
       </div>
+
+      {/* Severity breakdown of warnings and failures */}
+      {metrics.warn + metrics.fail > 0 && (
+        <div className="bg-white border border-zinc-200 rounded-lg p-3 shadow-xs space-y-2">
+          <div className="flex items-center justify-between text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
+            <span>Issue severity</span>
+            <span>{metrics.warn + metrics.fail} issues</span>
+          </div>
+          <div
+            className="h-2.5 w-full rounded-full overflow-hidden bg-zinc-100 flex"
+            role="img"
+            aria-label={`Issues by severity: ${metrics.critical} critical, ${metrics.high} high, ${metrics.medium} medium, ${metrics.low} low, ${metrics.info} info`}
+          >
+            {[
+              { label: "critical", count: metrics.critical, color: "bg-severity-critical" },
+              { label: "high", count: metrics.high, color: "bg-severity-high" },
+              { label: "medium", count: metrics.medium, color: "bg-severity-medium" },
+              { label: "low", count: metrics.low, color: "bg-severity-low" },
+              { label: "info", count: metrics.info, color: "bg-severity-info" },
+            ].map((seg) => (
+              <div
+                key={seg.label}
+                className={`h-full ${seg.color}`}
+                style={{ width: `${(seg.count / (metrics.warn + metrics.fail)) * 100}%` }}
+                title={`${seg.count} ${seg.label}`}
+              />
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-zinc-600">
+            {[
+              { label: "Critical", count: metrics.critical, color: "bg-severity-critical" },
+              { label: "High", count: metrics.high, color: "bg-severity-high" },
+              { label: "Medium", count: metrics.medium, color: "bg-severity-medium" },
+              { label: "Low", count: metrics.low, color: "bg-severity-low" },
+              { label: "Info", count: metrics.info, color: "bg-severity-info" },
+            ].map((item) => (
+              <span key={item.label} className="inline-flex items-center gap-1.5">
+                <span className={`w-2 h-2 rounded-xs ${item.color}`} />
+                {item.label} {item.count}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Sub-tab Navigation */}
       <div className="flex items-center gap-2 border-b border-zinc-200 pb-2">
@@ -351,6 +461,7 @@ export function FindingsView({
                     className="px-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-700 font-mono font-medium focus:outline-hidden"
                   >
                     <option value="ALL">All severities</option>
+                    <option value="CRITICAL_HIGH">Critical + High</option>
                     <option value="CRITICAL">Critical</option>
                     <option value="HIGH">High</option>
                     <option value="MEDIUM">Medium</option>
@@ -369,6 +480,32 @@ export function FindingsView({
                     <option value="PERFORMANCE">Performance</option>
                     <option value="CONTRACT">Contract</option>
                   </select>
+
+                  {/* Sort order */}
+                  <div className="relative">
+                    <ArrowUpDown className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-zinc-400 pointer-events-none" />
+                    <select
+                      aria-label="Sort findings"
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as FindingSort)}
+                      className="pl-8 pr-2.5 py-1.5 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-700 font-mono font-medium focus:outline-hidden"
+                    >
+                      <option value="severity">Most severe first</option>
+                      <option value="newest">Newest first</option>
+                      <option value="slowest">Slowest first</option>
+                    </select>
+                  </div>
+
+                  {hasActiveFilters && (
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 border border-zinc-200 bg-white transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                      <span>Clear</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* Text search */}
@@ -415,11 +552,23 @@ export function FindingsView({
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-100">
-                  {filteredFindings.map((finding) => (
+                  <div className="px-4 py-2 bg-white text-[11px] font-mono text-zinc-500">
+                    Showing {visibleFindings.length} of {filteredFindings.length} findings
+                    {filteredFindings.length !== findings.length && ` (filtered from ${findings.length})`}
+                  </div>
+                  {visibleFindings.map((finding) => (
                     <div
                       key={finding.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedFinding(finding)}
-                      className="p-3.5 hover:bg-zinc-50/70 cursor-pointer transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedFinding(finding);
+                        }
+                      }}
+                      className="p-3.5 hover:bg-zinc-50/70 focus:outline-none focus-visible:bg-zinc-100 cursor-pointer transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         {finding.status === "pass" && (
@@ -478,6 +627,17 @@ export function FindingsView({
                       </div>
                     </div>
                   ))}
+                  {filteredFindings.length > visibleCount && (
+                    <div className="p-3 bg-zinc-50/60 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                        className="px-3 py-1.5 rounded-md border border-zinc-200 bg-white hover:bg-zinc-50 text-xs font-mono font-medium text-zinc-700 transition-colors"
+                      >
+                        Show {Math.min(PAGE_SIZE, filteredFindings.length - visibleCount)} more
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
