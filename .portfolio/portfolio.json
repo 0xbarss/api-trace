@@ -1,0 +1,78 @@
+{
+  "tagline": "Automated API testing platform that finds security flaws, broken contracts, and slow endpoints from your OpenAPI link",
+  "cover": "cover.png",
+  "highlights": [
+    "Imports OpenAPI documentation directly from a URL or raw text to map all endpoints automatically",
+    "Detects broken access control by replaying requests with different user accounts",
+    "Runs realistic multi-step user workflows by passing IDs from one request to the next",
+    "Tests edge cases like unexpected HTTP methods, bad headers, and malformed request bodies",
+    "Queues test jobs in Redis so scans stay reliable and recover gracefully if interrupted",
+    "Streams live test progress and results directly to a browser dashboard"
+  ],
+  "links": [
+    {
+      "label": "Source Code",
+      "url": "https://github.com/0xbarss/api-trace"
+    },
+    {
+      "label": "Architecture Guide",
+      "url": "https://github.com/0xbarss/api-trace#architecture--design"
+    },
+    {
+      "label": "Test Catalogue",
+      "url": "https://github.com/0xbarss/api-trace#test-catalogue"
+    },
+    {
+      "label": "Vulnerability Sandbox",
+      "url": "https://github.com/0xbarss/vuln-bank-api"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "text",
+      "body": "Testing an API usually means juggling three different tools: one for data formats, another for response times, and a third for security checks. Most scanners only guess random paths, completely miss permission bugs between users, and cannot test flows that require multiple steps. API Trace takes your existing API documentation and runs all of these checks in one place, without needing you to install server software or change your database."
+    },
+    {
+      "type": "image",
+      "src": "architecture.png",
+      "caption": "Figure 1: How the system connects the web dashboard, background worker queue, and target API"
+    },
+    {
+      "type": "text",
+      "body": "Everything starts with your API documentation. The system reads the specification file, unpacks nested references, and builds a list of every route, input field, and expected response. It then builds a custom test plan for each endpoint. Mutating routes get tested with missing fields and bad data types to make sure the server rejects them cleanly instead of crashing."
+    },
+    {
+      "type": "image",
+      "src": "scorecard.png",
+      "caption": "Figure 2: Endpoint scorecard ranking routes from safest to most vulnerable with response time averages"
+    },
+    {
+      "type": "text",
+      "body": "Permission bugs are some of the most dangerous vulnerabilities on the web, and they are impossible to catch with just one login. API Trace lets you set up multiple test accounts, like a regular user, an administrator, and a second customer. The scanner makes a request as the first user, and then tries to view or change that same data using the second user's credentials. If the second user gets in, it flags an immediate security leak."
+    },
+    {
+      "type": "image",
+      "src": "findings_table.png",
+      "caption": "Figure 3: Searchable findings list with severity filters, failure details, and one-click data export"
+    },
+    {
+      "type": "image",
+      "src": "evidence_modal.png",
+      "caption": "Figure 4: Detailed view showing the exact request sent, the server response, and how to fix the problem"
+    },
+    {
+      "type": "text",
+      "body": "Real applications don't just call single endpoints in isolation. You create an item, view it, update it, and finally delete it. The planner spots these groups of related routes and tests them as a connected sequence, grabbing newly created IDs from the response and passing them into the next step. Each step runs as an isolated job in a background queue so heavy scans never freeze the app."
+    },
+    {
+      "type": "image",
+      "src": "latency_chart.png",
+      "caption": "Figure 5: Response time chart highlighting fast endpoints and slow outliers"
+    },
+    {
+      "type": "image",
+      "src": "live_runs.png",
+      "caption": "Figure 6: Live activity stream showing tests finishing in real time"
+    }
+  ]
+}
