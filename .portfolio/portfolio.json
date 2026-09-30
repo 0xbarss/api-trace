@@ -1,6 +1,7 @@
 {
   "tagline": "Automated API testing platform that finds security flaws, broken contracts, and slow endpoints from your OpenAPI link",
   "cover": "cover.png",
+  "coverAspectRatio": "1200 / 630",
   "highlights": [
     "Imports OpenAPI documentation directly from a URL or raw text to map all endpoints automatically",
     "Detects broken access control by replaying requests with different user accounts",
@@ -35,7 +36,10 @@
     {
       "type": "image",
       "src": "architecture.png",
-      "caption": "Figure 1: How the system connects the web dashboard, background worker queue, and target API"
+      "caption": "Figure 1: How the system connects the web dashboard, background worker queue, and target API",
+      "aspectRatio": "1100 / 640",
+      "width": 1100,
+      "height": 640
     },
     {
       "type": "text",
@@ -44,7 +48,10 @@
     {
       "type": "image",
       "src": "scorecard.png",
-      "caption": "Figure 2: Endpoint scorecard ranking routes from safest to most vulnerable with response time averages"
+      "caption": "Figure 2: Endpoint scorecard ranking routes from safest to most vulnerable with response time averages",
+      "aspectRatio": "1440 / 900",
+      "width": 1440,
+      "height": 900
     },
     {
       "type": "text",
@@ -53,12 +60,18 @@
     {
       "type": "image",
       "src": "findings_table.png",
-      "caption": "Figure 3: Searchable findings list with severity filters, failure details, and one-click data export"
+      "caption": "Figure 3: Searchable findings list with severity filters, failure details, and one-click data export",
+      "aspectRatio": "1440 / 900",
+      "width": 1440,
+      "height": 900
     },
     {
       "type": "image",
       "src": "evidence_modal.png",
-      "caption": "Figure 4: Detailed view showing the exact request sent, the server response, and how to fix the problem"
+      "caption": "Figure 4: Detailed view showing the exact request sent, the server response, and how to fix the problem",
+      "aspectRatio": "1440 / 900",
+      "width": 1440,
+      "height": 900
     },
     {
       "type": "text",
@@ -67,12 +80,18 @@
     {
       "type": "image",
       "src": "latency_chart.png",
-      "caption": "Figure 5: Response time chart highlighting fast endpoints and slow outliers"
+      "caption": "Figure 5: Response time chart highlighting fast endpoints and slow outliers",
+      "aspectRatio": "1440 / 900",
+      "width": 1440,
+      "height": 900
     },
     {
       "type": "image",
       "src": "live_runs.png",
-      "caption": "Figure 6: Live activity stream showing tests finishing in real time"
+      "caption": "Figure 6: Live activity stream showing tests finishing in real time",
+      "aspectRatio": "1440 / 900",
+      "width": 1440,
+      "height": 900
     }
   ]
 }
