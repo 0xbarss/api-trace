@@ -1,66 +1,117 @@
 {
-  "tagline": "Automated API testing platform that finds security flaws, broken contracts, and slow endpoints from your OpenAPI link",
+  "tagline": {
+    "en": "Automated API testing platform that finds security flaws, broken contracts, and slow endpoints from your OpenAPI link",
+    "tr": "OpenAPI bağlantınız üzerinden güvenlik açıklarını, API sözleşmesi ihlallerini ve yavaş uç noktaları tespit eden otomatik API test platformu"
+  },
   "cover": "cover.png",
   "coverAspectRatio": "1200 / 630",
   "highlights": [
-    "Imports OpenAPI documentation directly from a URL or raw text to map all endpoints automatically",
-    "Detects broken access control by replaying requests with different user accounts",
-    "Runs realistic multi-step user workflows by passing IDs from one request to the next",
-    "Tests edge cases like unexpected HTTP methods, bad headers, and malformed request bodies",
-    "Queues test jobs in Redis so scans stay reliable and recover gracefully if interrupted",
-    "Streams live test progress and results directly to a browser dashboard"
+    {
+      "en": "Imports OpenAPI documentation directly from a URL or raw text to map all endpoints automatically",
+      "tr": "Tüm uç noktaları otomatik olarak haritalandırmak için OpenAPI belgelerini doğrudan bir URL'den veya ham metin olarak içe aktarır"
+    },
+    {
+      "en": "Detects broken access control by replaying requests with different user accounts",
+      "tr": "Farklı kullanıcı hesaplarıyla istekleri yeniden göndererek erişim kontrolü açıklarını tespit eder"
+    },
+    {
+      "en": "Runs realistic multi-step user workflows by passing IDs from one request to the next",
+      "tr": "Bir istekte oluşturulan kimlikleri sonraki isteklere aktararak gerçekçi, çok adımlı kullanıcı akışlarını test eder"
+    },
+    {
+      "en": "Tests edge cases like unexpected HTTP methods, bad headers, and malformed request bodies",
+      "tr": "Beklenmeyen HTTP metotları, hatalı başlıklar ve biçimi bozuk istek gövdeleri gibi uç durumları test eder"
+    },
+    {
+      "en": "Queues test jobs in Redis so scans stay reliable and recover gracefully if interrupted",
+      "tr": "Test işlerini Redis kuyruğuna ekleyerek taramaların güvenilir biçimde çalışmasını ve kesintilerden sonra kaldığı yerden devam etmesini sağlar"
+    },
+    {
+      "en": "Streams live test progress and results directly to a browser dashboard",
+      "tr": "Test ilerlemesini ve sonuçlarını doğrudan tarayıcıdaki kontrol paneline gerçek zamanlı olarak aktarır"
+    }
   ],
   "links": [
     {
-      "label": "Source Code",
+      "label": {
+        "en": "Source Code",
+        "tr": "Kaynak Kod"
+      },
       "url": "https://github.com/0xbarss/api-trace"
     },
     {
-      "label": "Architecture Guide",
+      "label": {
+        "en": "Architecture Guide",
+        "tr": "Mimari Rehberi"
+      },
       "url": "https://github.com/0xbarss/api-trace#architecture--design"
     },
     {
-      "label": "Test Catalogue",
+      "label": {
+        "en": "Test Catalogue",
+        "tr": "Test Kataloğu"
+      },
       "url": "https://github.com/0xbarss/api-trace#test-catalogue"
     },
     {
-      "label": "Vulnerability Sandbox",
+      "label": {
+        "en": "Vulnerability Sandbox",
+        "tr": "Güvenlik Açığı Test Ortamı"
+      },
       "url": "https://github.com/0xbarss/vuln-bank-api"
     }
   ],
   "blocks": [
     {
       "type": "text",
-      "body": "Testing an API usually means juggling three different tools: one for data formats, another for response times, and a third for security checks. Most scanners only guess random paths, completely miss permission bugs between users, and cannot test flows that require multiple steps. API Trace takes your existing API documentation and runs all of these checks in one place, without needing you to install server software or change your database."
+      "body": {
+        "en": "Testing an API usually means juggling three different tools: one for data formats, another for response times, and a third for security checks. Most scanners only guess random paths, completely miss permission bugs between users, and cannot test flows that require multiple steps. API Trace takes your existing API documentation and runs all of these checks in one place, without needing you to install server software or change your database.",
+        "tr": "Bir API'yi test etmek genellikle üç farklı araç arasında gidip gelmek anlamına gelir: biri veri biçimleri, biri yanıt süreleri, diğeri ise güvenlik kontrolleri için. Çoğu tarayıcı rastgele yollar tahmin etmekle yetinir; kullanıcılar arasındaki yetki hatalarını gözden kaçırır ve birden fazla adım gerektiren akışları test edemez. API Trace, mevcut API belgelerinizi kullanarak tüm bu kontrolleri tek bir yerde gerçekleştirir; sunucu yazılımı kurmanızı veya veritabanınızı değiştirmenizi gerektirmez."
+      }
     },
     {
       "type": "image",
       "src": "architecture.png",
-      "caption": "Figure 1: How the system connects the web dashboard, background worker queue, and target API",
+      "caption": {
+        "en": "Figure 1: How the system connects the web dashboard, background worker queue, and target API",
+        "tr": "Şekil 1: Web kontrol panelinin, arka plan iş kuyruğunun ve hedef API'nin birbirine nasıl bağlandığı"
+      },
       "aspectRatio": "1100 / 640",
       "width": 1100,
       "height": 640
     },
     {
       "type": "text",
-      "body": "Everything starts with your API documentation. The system reads the specification file, unpacks nested references, and builds a list of every route, input field, and expected response. It then builds a custom test plan for each endpoint. Mutating routes get tested with missing fields and bad data types to make sure the server rejects them cleanly instead of crashing."
+      "body": {
+        "en": "Everything starts with your API documentation. The system reads the specification file, unpacks nested references, and builds a list of every route, input field, and expected response. It then builds a custom test plan for each endpoint. Mutating routes get tested with missing fields and bad data types to make sure the server rejects them cleanly instead of crashing.",
+        "tr": "Her şey API belgelerinizle başlar. Sistem, spesifikasyon dosyasını okur, iç içe geçmiş referansları çözümler ve tüm rotaları, giriş alanlarını ve beklenen yanıtları listeler. Ardından her uç nokta için özel bir test planı oluşturur. Veri değiştiren rotalar; sunucunun çökmesi yerine hatalı istekleri düzgün biçimde reddettiğinden emin olmak için eksik alanlar ve yanlış veri türleriyle test edilir."
+      }
     },
     {
       "type": "image",
       "src": "scorecard.png",
-      "caption": "Figure 2: Endpoint scorecard ranking routes from safest to most vulnerable with response time averages",
+      "caption": {
+        "en": "Figure 2: Endpoint scorecard ranking routes from safest to most vulnerable with response time averages",
+        "tr": "Şekil 2: Rotaları en güvenliden en savunmasız olana sıralayan ve ortalama yanıt sürelerini gösteren uç nokta puan kartı"
+      },
       "aspectRatio": "1440 / 900",
       "width": 1440,
       "height": 900
     },
     {
       "type": "text",
-      "body": "Permission bugs are some of the most dangerous vulnerabilities on the web, and they are impossible to catch with just one login. API Trace lets you set up multiple test accounts, like a regular user, an administrator, and a second customer. The scanner makes a request as the first user, and then tries to view or change that same data using the second user's credentials. If the second user gets in, it flags an immediate security leak."
+      "body": {
+        "en": "Permission bugs are some of the most dangerous vulnerabilities on the web, and they are impossible to catch with just one login. API Trace lets you set up multiple test accounts, like a regular user, an administrator, and a second customer. The scanner makes a request as the first user, and then tries to view or change that same data using the second user's credentials. If the second user gets in, it flags an immediate security leak.",
+        "tr": "Yetkilendirme hataları, web üzerindeki en tehlikeli güvenlik açıklarından bazılarıdır ve yalnızca tek bir kullanıcı hesabıyla tespit edilemez. API Trace; normal kullanıcı, yönetici ve ikinci bir müşteri gibi birden fazla test hesabı oluşturmanıza olanak tanır. Tarayıcı önce birinci kullanıcı adına istek gönderir, ardından aynı verileri ikinci kullanıcının kimlik bilgileriyle görüntülemeyi veya değiştirmeyi dener. İkinci kullanıcı veriye erişebiliyorsa sistem bunu doğrudan bir güvenlik açığı olarak işaretler."
+      }
     },
     {
       "type": "image",
       "src": "findings_table.png",
-      "caption": "Figure 3: Searchable findings list with severity filters, failure details, and one-click data export",
+      "caption": {
+        "en": "Figure 3: Searchable findings list with severity filters, failure details, and one-click data export",
+        "tr": "Şekil 3: Önem derecesi filtreleri, hata ayrıntıları ve tek tıkla veri dışa aktarma özelliği içeren aranabilir bulgular listesi"
+      },
       "aspectRatio": "1440 / 900",
       "width": 1440,
       "height": 900
@@ -68,19 +119,28 @@
     {
       "type": "image",
       "src": "evidence_modal.png",
-      "caption": "Figure 4: Detailed view showing the exact request sent, the server response, and how to fix the problem",
+      "caption": {
+        "en": "Figure 4: Detailed view showing the exact request sent, the server response, and how to fix the problem",
+        "tr": "Şekil 4: Gönderilen isteğin tamamını, sunucu yanıtını ve sorunun nasıl giderileceğini gösteren ayrıntılı görünüm"
+      },
       "aspectRatio": "1440 / 900",
       "width": 1440,
       "height": 900
     },
     {
       "type": "text",
-      "body": "Real applications don't just call single endpoints in isolation. You create an item, view it, update it, and finally delete it. The planner spots these groups of related routes and tests them as a connected sequence, grabbing newly created IDs from the response and passing them into the next step. Each step runs as an isolated job in a background queue so heavy scans never freeze the app."
+      "body": {
+        "en": "Real applications don't just call single endpoints in isolation. You create an item, view it, update it, and finally delete it. The planner spots these groups of related routes and tests them as a connected sequence, grabbing newly created IDs from the response and passing them into the next step. Each step runs as an isolated job in a background queue so heavy scans never freeze the app.",
+        "tr": "Gerçek uygulamalar yalnızca tek tek uç noktaları birbirinden bağımsız çağırmaz. Örneğin bir öğe oluşturur, görüntüler, günceller ve sonunda silersiniz. Planlayıcı, birbiriyle ilişkili bu rota gruplarını algılar ve bunları birbirine bağlı bir akış olarak test eder; yanıtta oluşturulan yeni kimlikleri alıp bir sonraki adıma aktarır. Her adım arka plan kuyruğunda yalıtılmış bir iş olarak çalışır; böylece yoğun taramalar uygulamanın yanıt vermesini engellemez."
+      }
     },
     {
       "type": "image",
       "src": "latency_chart.png",
-      "caption": "Figure 5: Response time chart highlighting fast endpoints and slow outliers",
+      "caption": {
+        "en": "Figure 5: Response time chart highlighting fast endpoints and slow outliers",
+        "tr": "Şekil 5: Hızlı uç noktaları ve yavaş aykırı değerleri öne çıkaran yanıt süresi grafiği"
+      },
       "aspectRatio": "1440 / 900",
       "width": 1440,
       "height": 900
@@ -88,7 +148,10 @@
     {
       "type": "image",
       "src": "live_runs.png",
-      "caption": "Figure 6: Live activity stream showing tests finishing in real time",
+      "caption": {
+        "en": "Figure 6: Live activity stream showing tests finishing in real time",
+        "tr": "Şekil 6: Testlerin gerçek zamanlı olarak tamamlandığını gösteren canlı etkinlik akışı"
+      },
       "aspectRatio": "1440 / 900",
       "width": 1440,
       "height": 900
